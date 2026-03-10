@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enum types ────────────────────────────────────────────────────────────
+
+enum ResourceType {
+  person
+  placeholder
+}
+
+enum EmploymentType {
+  internal
+  external
+}
+
+enum ScenarioStatus {
+  draft
+  approved
+  archived
+}
+
+enum CostBasis {
+  hourly
+  monthly
+}
+
+// ─── Company ───────────────────────────────────────────────────────────────
+
+model CompanyType {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  companies   Company[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Company {
+  id                String      @id @default(cuid())
+  name              String
+  companyTypeId     String
+  companyType       CompanyType @relation(fields: [companyTypeId], references: [id])
+  isInternalCompany Boolean     @default(false)
+  active            Boolean     @default(true)
+  resources         Resource[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+// ─── Team ──────────────────────────────────────────────────────────────────
+
+model Team {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  projectCode String       @unique
+  active      Boolean      @default(true)
+  allocations Allocation[]
+  otherCosts  OtherCost[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+// ─── Competency ────────────────────────────────────────────────────────────
+
+model Competency {
+  id                   String               @id @default(cuid())
+  name                 String               @unique
+  category             String?
+  description          String?
+  resourceCompetencies ResourceCompetency[]
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+}
+
+// ─── Resource ──────────────────────────────────────────────────────────────
+
+model Resource {
+  id             String               @id @default(cuid())
+  type           ResourceType         @default(person)
+  name           String
+  employmentType EmploymentType
+  companyId      String
+  company        Company              @relation(fields: [companyId], references: [id])
+  primaryRole    String?
+  activeFrom     DateTime?
+  activeTo       DateTime?
+  notes          String?
+  competencies   ResourceCompetency[]
+  rateCards      RateCard[]
+  allocations    Allocation[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+}
+
+model ResourceCompetency {
+  id           String     @id @default(cuid())
+  resourceId   String
+  resource     Resource   @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  competencyId String
+  competency   Competency @relation(fields: [competencyId], references: [id])
+  level        Int?
+  isPrimary    Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+
+  @@unique([resourceId, competencyId])
+}
+
+// ─── Rate card ─────────────────────────────────────────────────────────────
+
+model RateCard {
+  id             String    @id @default(cuid())
+  resourceId     String
+  resource       Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  costBasis      CostBasis @default(hourly)
+  hourlyRateNok  Decimal?  @db.Decimal(10, 2)
+  monthlyRateNok Decimal?  @db.Decimal(10, 2)
+  vatPct         Decimal?  @db.Decimal(5, 4)
+  invoiceFactor  Decimal   @default(1.0) @db.Decimal(5, 4)
+  source         String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ─── Scenario + PlanningPeriod ─────────────────────────────────────────────
+
+model Scenario {
+  id              String           @id @default(cuid())
+  name            String
+  year            Int
+  status          ScenarioStatus   @default(draft)
+  description     String?
+  planningPeriods PlanningPeriod[]
+  allocations     Allocation[]
+  otherCosts      OtherCost[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([name, year])
+}
+
+model PlanningPeriod {
+  id               String       @id @default(cuid())
+  scenarioId       String
+  scenario         Scenario     @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  year             Int
+  month            Int
+  workingHoursNorm Decimal      @default(162.0) @db.Decimal(6, 2)
+  allocations      Allocation[]
+  otherCosts       OtherCost[]
+  createdAt        DateTime     @default(now())
+
+  @@unique([scenarioId, year, month])
+}
+
+// ─── Allocation ────────────────────────────────────────────────────────────
+
+model Allocation {
+  id               String         @id @default(cuid())
+  scenarioId       String
+  scenario         Scenario       @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  teamId           String
+  team             Team           @relation(fields: [teamId], references: [id])
+  resourceId       String
+  resource         Resource       @relation(fields: [resourceId], references: [id])
+  planningPeriodId String
+  planningPeriod   PlanningPeriod @relation(fields: [planningPeriodId], references: [id])
+  allocationPct    Decimal        @db.Decimal(5, 4)
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([scenarioId, teamId, resourceId, planningPeriodId])
+}
+
+// ─── Other costs ───────────────────────────────────────────────────────────
+
+model OtherCost {
+  id               String         @id @default(cuid())
+  scenarioId       String
+  scenario         Scenario       @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  teamId           String
+  team             Team           @relation(fields: [teamId], references: [id])
+  planningPeriodId String
+  planningPeriod   PlanningPeriod @relation(fields: [planningPeriodId], references: [id])
+  category         String
+  description      String?
+  amountNok        Decimal        @db.Decimal(12, 2)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}

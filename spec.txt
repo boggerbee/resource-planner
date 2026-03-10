@@ -1,0 +1,12 @@
+Jeg skal lage et webapplikasjon som hjelper meg å administrere bemanningen av ulike produktteam.
+Prosjektet kan hete "resource planner".
+Jeg legger ved en excel-fil som viser hvordan jobben gjøres manuelt i dag.
+Hovedformålet med løsningen skal være å holde orden på kapasitet og kompetanse i team, både fast ansatte og konsulenter. Det skal være mulig å regne kostnad per team per måned og totalt for året.
+Egenskaper for team er beskrivelse, navn og prosjektkode.
+Ressurser skal ha navn, firma, timepris, kompetanse og informasjon om de er fast ansatt eller innleid.
+Firma kan være en egen entitet som sier noe om hva slags firma det er, feks produksjonsbedrift eller bemanningsforetak.
+Ressursene kan fordele tiden sin over flere team samtidig med en prosentandel i hver.
+Løsningen skal kunne vise hvor mye tid hver ressurs bruker i hver team hver måned.
+Man skal kunne følge både kostnad og FTE (fulltidsekvivalenter) per måned.
+Det skal være mulig å rapportere på fast ansatte (interne) og konsulenter hver for seg og samlet.
+
