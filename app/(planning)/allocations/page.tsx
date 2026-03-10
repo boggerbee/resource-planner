@@ -27,7 +27,7 @@ export default async function AllocationsPage({
     );
   }
 
-  const [allocations, periods] = await Promise.all([
+  const [allocations, periods, allResources] = await Promise.all([
     prisma.allocation.findMany({
       where: { scenarioId, teamId },
       include: {
@@ -38,6 +38,10 @@ export default async function AllocationsPage({
     prisma.planningPeriod.findMany({
       where: { scenarioId },
       orderBy: { month: "asc" },
+    }),
+    prisma.resource.findMany({
+      include: { company: true },
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -80,6 +84,23 @@ export default async function AllocationsPage({
   }
 
   const gridData = Array.from(resourceMap.values());
+
+  const allocatedResourceIds = new Set(gridData.map((d) => d.resource.id));
+  const availableResources = allResources
+    .filter((r) => !allocatedResourceIds.has(r.id))
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      employmentType: r.employmentType,
+      type: r.type,
+      company: { name: r.company.name },
+    }));
+
+  // Serialize Decimal fields before passing to Client Component
+  const serializedPeriods = periods.map((p) => ({
+    ...p,
+    workingHoursNorm: Number(p.workingHoursNorm),
+  }));
 
   return (
     <div className="space-y-6">
@@ -130,10 +151,11 @@ export default async function AllocationsPage({
 
       <AllocationGrid
         gridData={gridData}
-        periods={periods}
+        periods={serializedPeriods}
         overbookedKeys={overbookedKeys}
         scenarioId={scenarioId}
         teamId={teamId}
+        availableResources={availableResources}
       />
     </div>
   );
