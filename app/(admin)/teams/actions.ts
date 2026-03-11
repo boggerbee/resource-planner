@@ -9,14 +9,17 @@ const TeamSchema = z.object({
   projectCode: z.string().min(1),
   description: z.string().optional(),
   active: z.boolean().default(true),
+  teamLeadId: z.string().optional(),
 });
 
 export async function createTeam(formData: FormData) {
+  const teamLeadId = formData.get("teamLeadId") as string | null;
   const parsed = TeamSchema.safeParse({
     name: formData.get("name"),
     projectCode: formData.get("projectCode"),
     description: formData.get("description") || undefined,
     active: true,
+    teamLeadId: teamLeadId || undefined,
   });
 
   if (!parsed.success) {
@@ -28,19 +31,23 @@ export async function createTeam(formData: FormData) {
 }
 
 export async function updateTeam(id: string, formData: FormData) {
+  const teamLeadId = formData.get("teamLeadId") as string | null;
   const parsed = TeamSchema.safeParse({
     name: formData.get("name"),
     projectCode: formData.get("projectCode"),
     description: formData.get("description") || undefined,
-    // checkbox sends "true" when checked, nothing when unchecked
     active: formData.get("active") !== null,
+    teamLeadId: teamLeadId || undefined,
   });
 
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  await prisma.team.update({ where: { id }, data: parsed.data });
+  await prisma.team.update({
+    where: { id },
+    data: { ...parsed.data, teamLeadId: teamLeadId || null },
+  });
   revalidatePath("/teams");
 }
 

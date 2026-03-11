@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { updateTeam, deleteTeam } from "../actions";
+import { ResourceSearch } from "../resource-search";
 
 export default async function EditTeamPage({
   params,
@@ -8,7 +9,10 @@ export default async function EditTeamPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const team = await prisma.team.findUnique({ where: { id } });
+  const [team, resources] = await Promise.all([
+    prisma.team.findUnique({ where: { id }, include: { teamLead: true } }),
+    prisma.resource.findMany({ where: { type: "person" }, orderBy: { name: "asc" } }),
+  ]);
   if (!team) notFound();
 
   async function handleUpdate(formData: FormData) {
@@ -52,6 +56,14 @@ export default async function EditTeamPage({
             rows={3}
             defaultValue={team.description ?? ""}
             className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Teamlead</label>
+          <ResourceSearch
+            resources={resources.map((r) => ({ id: r.id, name: r.name }))}
+            defaultValue={team.teamLeadId ?? ""}
+            defaultName={team.teamLead?.name ?? ""}
           />
         </div>
         <div className="flex items-center gap-2">

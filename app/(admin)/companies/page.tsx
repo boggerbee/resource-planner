@@ -33,7 +33,11 @@ export default async function CompaniesPage() {
           <tbody className="divide-y">
             {companies.map((c) => (
               <tr key={c.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium">{c.name}</td>
+                <td className="px-4 py-3 font-medium">
+                  <Link href={`/companies/${c.id}`} className="hover:underline">
+                    {c.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-gray-600">{c.companyType.name}</td>
                 <td className="px-4 py-3 text-gray-600">{c._count.resources}</td>
                 <td className="px-4 py-3">

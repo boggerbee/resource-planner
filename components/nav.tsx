@@ -5,8 +5,10 @@ const navLinks = [
   { href: "/resources", label: "Ressurser" },
   { href: "/companies", label: "Firma" },
   { href: "/competencies", label: "Kompetanser" },
+  { href: "/scenarios", label: "Scenarier" },
   { href: "/allocations", label: "Allokeringer" },
-  { href: "/reports/portfolio", label: "Rapporter" },
+  { href: "/reports/teams", label: "Teamoversikt" },
+  { href: "/reports/portfolio", label: "Portefølje" },
 ];
 
 export function Nav() {

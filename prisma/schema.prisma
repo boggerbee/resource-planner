@@ -55,15 +55,17 @@ model Company {
 // ─── Team ──────────────────────────────────────────────────────────────────
 
 model Team {
-  id          String       @id @default(cuid())
-  name        String
-  description String?
-  projectCode String       @unique
-  active      Boolean      @default(true)
-  allocations Allocation[]
-  otherCosts  OtherCost[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id           String       @id @default(cuid())
+  name         String
+  description  String?
+  projectCode  String       @unique
+  active       Boolean      @default(true)
+  teamLeadId   String?
+  teamLead     Resource?    @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
+  allocations  Allocation[]
+  otherCosts   OtherCost[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 }
 
 // ─── Competency ────────────────────────────────────────────────────────────
@@ -94,6 +96,7 @@ model Resource {
   competencies   ResourceCompetency[]
   rateCards      RateCard[]
   allocations    Allocation[]
+  ledTeams       Team[]               @relation("TeamLead")
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 }

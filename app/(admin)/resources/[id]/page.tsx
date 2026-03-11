@@ -12,10 +12,14 @@ function formatNok(n: unknown) {
 
 export default async function EditResourcePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ back?: string }>;
 }) {
   const { id } = await params;
+  const { back } = await searchParams;
+  const backUrl = back ?? "/resources";
 
   const [resource, companies] = await Promise.all([
     prisma.resource.findUnique({
@@ -33,13 +37,13 @@ export default async function EditResourcePage({
   async function handleUpdate(formData: FormData) {
     "use server";
     const result = await updateResource(id, formData);
-    if (!result?.error) redirect("/resources");
+    if (!result?.error) redirect(backUrl);
   }
 
   async function handleDelete() {
     "use server";
     await deleteResource(id);
-    redirect("/resources");
+    redirect(backUrl);
   }
 
   async function handleAddRateCard(formData: FormData) {
@@ -133,7 +137,7 @@ export default async function EditResourcePage({
           >
             Lagre
           </button>
-          <a href="/resources" className="rounded border px-4 py-2 text-sm hover:bg-gray-50">
+          <a href={backUrl} className="rounded border px-4 py-2 text-sm hover:bg-gray-50">
             Avbryt
           </a>
         </div>
