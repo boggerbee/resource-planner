@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, useTransition, useRef } from "react";
+import { Fragment, useState, useTransition, useRef, useEffect } from "react";
 import { upsertAllocations, removeResourceFromTeam } from "./actions";
 
 const MONTH_LABELS = [
@@ -204,7 +204,9 @@ function AddResourcePanel({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const filtered = availableResources.filter((r) =>
     `${r.name} ${r.company.name}`.toLowerCase().includes(query.toLowerCase())
@@ -218,8 +220,33 @@ function AddResourcePanel({
   function handleSelect(resource: Resource) {
     setOpen(false);
     setQuery("");
+    setActiveIndex(-1);
     onAdded(resource);
   }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!open || filtered.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => (i + 1) % filtered.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => (i - 1 + filtered.length) % filtered.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (activeIndex >= 0) handleSelect(filtered[activeIndex]);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      setActiveIndex(-1);
+    }
+  }
+
+  useEffect(() => {
+    if (activeIndex < 0 || !listRef.current) return;
+    const item = listRef.current.children[activeIndex] as HTMLElement | undefined;
+    item?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex]);
 
   if (!open) {
     return (
@@ -244,21 +271,27 @@ function AddResourcePanel({
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setActiveIndex(-1);
+          }}
+          onKeyDown={handleKeyDown}
           placeholder="Søk etter ressurs…"
           className="w-full rounded border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         {(filtered.length > 0 || query) && (
-          <ul className="mt-1 max-h-72 overflow-auto rounded border bg-white shadow-lg">
+          <ul ref={listRef} className="mt-1 max-h-72 overflow-auto rounded border bg-white shadow-lg">
             {filtered.length === 0 ? (
               <li className="px-3 py-2 text-sm text-gray-400">Ingen treff</li>
             ) : (
-              filtered.map((r) => (
+              filtered.map((r, i) => (
                 <li key={r.id}>
                   <button
                     type="button"
                     onClick={() => handleSelect(r)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-blue-50"
+                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-blue-50 ${
+                      activeIndex === i ? "bg-blue-100" : ""
+                    }`}
                   >
                     <span className="font-medium">{r.name}</span>
                     <span className="text-xs text-gray-500">
@@ -273,7 +306,7 @@ function AddResourcePanel({
       </div>
       <button
         type="button"
-        onClick={() => { setOpen(false); setQuery(""); }}
+        onClick={() => { setOpen(false); setQuery(""); setActiveIndex(-1); }}
         className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
       >
         Avbryt
@@ -317,6 +350,17 @@ export function AllocationGrid({
     ...initialGridData,
     ...newRows.map((r) => ({ resource: r, months: {} as Record<number, number> })),
   ];
+
+  // Sum of per-resource averages (= "headcount equivalent" for the year)
+  const sumAvgFte = (filter?: (r: Resource) => boolean) => {
+    if (months.length === 0) return 0;
+    return allRows
+      .filter((row) => !filter || filter(row.resource))
+      .reduce((sum, row) => {
+        const avg = months.reduce((s, m) => s + (row.months[m] ?? 0), 0) / months.length;
+        return sum + avg;
+      }, 0);
+  };
 
   return (
     <div className="space-y-3">
@@ -385,7 +429,7 @@ export function AllocationGrid({
                     );
                   })}
                   <td className="px-4 py-3 text-center font-medium tabular-nums">
-                    {avgFTE > 0 ? avgFTE.toFixed(2) : "—"}
+                    {avgFTE > 0 ? avgFTE.toFixed(1) : "—"}
                   </td>
                 </tr>
 
@@ -409,6 +453,34 @@ export function AllocationGrid({
           })}
 
         </tbody>
+
+        {allRows.length > 0 && (
+          <tfoot className="border-t-2 border-gray-200 bg-gray-50 text-xs">
+            <tr>
+              <td className="px-4 py-2 font-semibold text-gray-800" colSpan={3}>
+                Sum FTE (år)
+              </td>
+              {months.map((m) => (
+                <td key={m} className="px-1 py-2" />
+              ))}
+              <td className="px-4 py-2 text-center tabular-nums">
+                <div className="font-semibold text-gray-800">
+                  {sumAvgFte() > 0 ? sumAvgFte().toFixed(1) : "—"}
+                </div>
+                <div className="text-gray-500">
+                  {sumAvgFte((r) => r.employmentType === "internal") > 0
+                    ? `${sumAvgFte((r) => r.employmentType === "internal").toFixed(1)} int`
+                    : ""}
+                </div>
+                <div className="text-gray-500">
+                  {sumAvgFte((r) => r.employmentType === "external") > 0
+                    ? `${sumAvgFte((r) => r.employmentType === "external").toFixed(1)} eks`
+                    : ""}
+                </div>
+              </td>
+            </tr>
+          </tfoot>
+        )}
       </table>
 
       {allRows.length === 0 && (

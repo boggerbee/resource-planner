@@ -4,6 +4,7 @@ import Link from "next/link";
 
 export default async function TeamsPage() {
   const teams = await prisma.team.findMany({
+    include: { teamLead: true },
     orderBy: { name: "asc" },
   });
 
@@ -25,6 +26,7 @@ export default async function TeamsPage() {
               <th className="px-4 py-3">Navn</th>
               <th className="px-4 py-3">Prosjektkode</th>
               <th className="px-4 py-3">Beskrivelse</th>
+              <th className="px-4 py-3">Teamlead</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -42,6 +44,9 @@ export default async function TeamsPage() {
                 </td>
                 <td className="px-4 py-3 text-gray-600">
                   {team.description ?? "—"}
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  {team.teamLead?.name ?? "—"}
                 </td>
                 <td className="px-4 py-3">
                   <Badge variant={team.active ? "default" : "secondary"}>
