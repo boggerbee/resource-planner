@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { updateTeam, deleteTeam } from "../actions";
 import { ResourceSearch } from "../resource-search";
+import { TagSelector } from "../tag-selector";
 
 export default async function EditTeamPage({
   params,
@@ -9,9 +10,13 @@ export default async function EditTeamPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [team, resources] = await Promise.all([
-    prisma.team.findUnique({ where: { id }, include: { teamLead: true } }),
+  const [team, resources, tags] = await Promise.all([
+    prisma.team.findUnique({
+      where: { id },
+      include: { teamLead: true, attestant: true, godkjenner: true, tags: { include: { tag: true } } },
+    }),
     prisma.resource.findMany({ where: { type: "person" }, orderBy: { name: "asc" } }),
+    prisma.tag.findMany({ orderBy: { name: "asc" } }),
   ]);
   if (!team) notFound();
 
@@ -59,12 +64,57 @@ export default async function EditTeamPage({
           />
         </div>
         <div>
+          <label className="block text-sm font-medium text-gray-700">Konto</label>
+          <input
+            type="number"
+            name="konto"
+            defaultValue={team.konto ?? ""}
+            className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Koststed</label>
+          <input
+            type="number"
+            name="koststed"
+            defaultValue={team.koststed ?? ""}
+            className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
           <label className="block text-sm font-medium text-gray-700">Teamlead</label>
           <ResourceSearch
             resources={resources.map((r) => ({ id: r.id, name: r.name }))}
             defaultValue={team.teamLeadId ?? ""}
             defaultName={team.teamLead?.name ?? ""}
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Attestant</label>
+          <ResourceSearch
+            resources={resources.map((r) => ({ id: r.id, name: r.name }))}
+            defaultValue={team.attestantId ?? ""}
+            defaultName={team.attestant?.name ?? ""}
+            name="attestantId"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Godkjenner</label>
+          <ResourceSearch
+            resources={resources.map((r) => ({ id: r.id, name: r.name }))}
+            defaultValue={team.godkjennerId ?? ""}
+            defaultName={team.godkjenner?.name ?? ""}
+            name="godkjennerId"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Merkelapper</label>
+          <div className="mt-2">
+            <TagSelector
+              tags={tags}
+              selectedIds={team.tags.map((tt) => tt.tagId)}
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <input
