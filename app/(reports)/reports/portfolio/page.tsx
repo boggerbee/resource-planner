@@ -1,14 +1,9 @@
+import React from "react";
 import { prisma } from "@/lib/prisma";
 import {
   computeMonthlyCost,
-  computeMonthlyFTE,
   resolveRateCard,
 } from "@/lib/domain/calculations";
-
-const MONTH_LABELS = [
-  "Jan", "Feb", "Mar", "Apr", "Mai", "Jun",
-  "Jul", "Aug", "Sep", "Okt", "Nov", "Des",
-];
 
 function formatNok(amount: number) {
   return new Intl.NumberFormat("nb-NO", {
@@ -42,34 +37,28 @@ export default async function PortfolioReportPage({
   const allocations = await prisma.allocation.findMany({
     where: { scenarioId },
     include: {
-      resource: {
-        include: {
-          rateCards: true,
-        },
-      },
+      resource: { include: { rateCards: true } },
       planningPeriod: true,
-      team: true,
+      team: { include: { tags: { include: { tag: true } } } },
     },
   });
 
-  // Aggregate by month and employment type
-  type MonthSummary = { internalCost: number; externalCost: number; internalFTE: number; externalFTE: number };
-  const byMonth: Record<number, MonthSummary> = {};
-  for (let m = 1; m <= 12; m++) {
-    byMonth[m] = { internalCost: 0, externalCost: 0, internalFTE: 0, externalFTE: 0 };
-  }
+  // Aggregate annual cost per team, split intern/ekstern
+  type TeamCost = { internalCost: number; externalCost: number; name: string; projectCode: string };
+  const byTeam = new Map<string, TeamCost>();
+
+  // Also track portfolio-level totals (for summary cards)
+  let totalInternal = 0;
+  let totalExternal = 0;
 
   for (const alloc of allocations) {
-    const month = alloc.planningPeriod.month;
-    const year = alloc.planningPeriod.year;
+    const { month, year, workingHoursNorm } = alloc.planningPeriod;
     const pct = Number(alloc.allocationPct);
-    const hoursNorm = Number(alloc.planningPeriod.workingHoursNorm);
+    const hoursNorm = Number(workingHoursNorm);
     const isInternal = alloc.resource.employmentType === "internal";
 
     const rateCards = alloc.resource.rateCards.map((rc) => ({
       ...rc,
-      effectiveFrom: rc.effectiveFrom,
-      effectiveTo: rc.effectiveTo,
       costBasis: rc.costBasis as "hourly" | "monthly",
       hourlyRateNok: rc.hourlyRateNok ? Number(rc.hourlyRateNok) : null,
       monthlyRateNok: rc.monthlyRateNok ? Number(rc.monthlyRateNok) : null,
@@ -78,37 +67,93 @@ export default async function PortfolioReportPage({
     }));
 
     const rateCard = resolveRateCard(rateCards, year, month);
+    const cost = rateCard
+      ? computeMonthlyCost({
+          allocationPct: pct,
+          rateCard: {
+            costBasis: rateCard.costBasis,
+            hourlyRateNok: rateCard.hourlyRateNok,
+            monthlyRateNok: rateCard.monthlyRateNok,
+            vatPct: rateCard.vatPct,
+            invoiceFactor: rateCard.invoiceFactor,
+          },
+          employmentType: alloc.resource.employmentType as "internal" | "external",
+          workingHoursNorm: hoursNorm,
+        })
+      : 0;
 
-    if (rateCard) {
-      const cost = computeMonthlyCost({
-        allocationPct: pct,
-        rateCard: {
-          costBasis: rateCard.costBasis,
-          hourlyRateNok: rateCard.hourlyRateNok,
-          monthlyRateNok: rateCard.monthlyRateNok,
-          vatPct: rateCard.vatPct,
-          invoiceFactor: rateCard.invoiceFactor,
-        },
-        employmentType: alloc.resource.employmentType as "internal" | "external",
-        workingHoursNorm: hoursNorm,
+    if (!byTeam.has(alloc.teamId)) {
+      byTeam.set(alloc.teamId, {
+        internalCost: 0,
+        externalCost: 0,
+        name: alloc.team.name,
+        projectCode: alloc.team.projectCode,
       });
-
-      if (isInternal) {
-        byMonth[month].internalCost += cost;
-        byMonth[month].internalFTE += pct;
-      } else {
-        byMonth[month].externalCost += cost;
-        byMonth[month].externalFTE += pct;
-      }
+    }
+    const entry = byTeam.get(alloc.teamId)!;
+    if (isInternal) {
+      entry.internalCost += cost;
+      totalInternal += cost;
     } else {
-      // No rate card — still count FTE
-      if (isInternal) byMonth[month].internalFTE += pct;
-      else byMonth[month].externalFTE += pct;
+      entry.externalCost += cost;
+      totalExternal += cost;
     }
   }
 
-  const totalInternal = Object.values(byMonth).reduce((s, m) => s + m.internalCost, 0);
-  const totalExternal = Object.values(byMonth).reduce((s, m) => s + m.externalCost, 0);
+  // Build tag groups — each team goes under its first tag (alphabetically), or "untagged"
+  // We need team→tags mapping from allocations' team data
+  const teamTagMap = new Map<string, { id: string; name: string; color: string | null }[]>();
+  for (const alloc of allocations) {
+    if (!teamTagMap.has(alloc.teamId)) {
+      const sorted = alloc.team.tags
+        .map((tt) => tt.tag)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      teamTagMap.set(alloc.teamId, sorted);
+    }
+  }
+
+  type TagInfo = { id: string; name: string; color: string | null };
+  const tagGroups = new Map<string, { tag: TagInfo; teamIds: string[] }>();
+  const untaggedTeamIds: string[] = [];
+
+  for (const [teamId] of byTeam) {
+    const tags = teamTagMap.get(teamId) ?? [];
+    if (tags.length === 0) {
+      untaggedTeamIds.push(teamId);
+    } else {
+      const primaryTag = tags[0];
+      if (!tagGroups.has(primaryTag.id)) {
+        tagGroups.set(primaryTag.id, { tag: primaryTag, teamIds: [] });
+      }
+      tagGroups.get(primaryTag.id)!.teamIds.push(teamId);
+    }
+  }
+
+  const sortedGroups = Array.from(tagGroups.values()).sort((a, b) =>
+    a.tag.name.localeCompare(b.tag.name)
+  );
+
+  function TeamRow({ teamId }: { teamId: string }) {
+    const team = byTeam.get(teamId)!;
+    return (
+      <tr className="hover:bg-gray-50">
+        <td className="py-2.5 pl-8 pr-4 text-sm">
+          <span className="font-medium">{team.name}</span>
+          <span className="ml-2 text-xs text-gray-400">{team.projectCode}</span>
+        </td>
+        <td className="px-4 py-2.5 text-right tabular-nums text-sm">
+          {formatNok(team.internalCost)}
+        </td>
+        <td className="px-4 py-2.5 text-right tabular-nums text-sm">
+          {formatNok(team.externalCost)}
+        </td>
+        <td className="px-4 py-2.5 text-right tabular-nums text-sm font-medium">
+          {formatNok(team.internalCost + team.externalCost)}
+        </td>
+      </tr>
+    );
+  }
+
 
   return (
     <div className="space-y-6">
@@ -147,85 +192,81 @@ export default async function PortfolioReportPage({
         </div>
         <div className="rounded border bg-white p-4">
           <p className="text-xs text-gray-500 uppercase">Totalt</p>
-          <p className="text-2xl font-bold mt-1">
-            {formatNok(totalInternal + totalExternal)}
-          </p>
+          <p className="text-2xl font-bold mt-1">{formatNok(totalInternal + totalExternal)}</p>
         </div>
       </div>
 
-      {/* Monthly table */}
-      <div className="overflow-x-auto rounded border bg-white">
+      {/* Per-team costs grouped by tag */}
+      <div className="rounded border bg-white overflow-hidden">
         <table className="w-full text-sm">
           <thead className="border-b bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3 text-left">Måned</th>
-              <th className="px-4 py-3 text-right">Intern FTE</th>
-              <th className="px-4 py-3 text-right">Intern kostnad</th>
-              <th className="px-4 py-3 text-right">Ekstern FTE</th>
-              <th className="px-4 py-3 text-right">Ekstern kostnad</th>
-              <th className="px-4 py-3 text-right">Total FTE</th>
-              <th className="px-4 py-3 text-right">Total kostnad</th>
+              <th className="px-4 py-3 text-left">Team</th>
+              <th className="px-4 py-3 text-right">Intern</th>
+              <th className="px-4 py-3 text-right">Ekstern</th>
+              <th className="px-4 py-3 text-right">Totalt</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {MONTH_LABELS.map((label, idx) => {
-              const m = idx + 1;
-              const row = byMonth[m];
+            {sortedGroups.map(({ tag, teamIds }) => {
+              const intCost = teamIds.reduce((s, id) => s + (byTeam.get(id)?.internalCost ?? 0), 0);
+              const extCost = teamIds.reduce((s, id) => s + (byTeam.get(id)?.externalCost ?? 0), 0);
               return (
-                <tr key={m} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{label}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {row.internalFTE.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatNok(row.internalCost)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {row.externalFTE.toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {formatNok(row.externalCost)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-medium">
-                    {(row.internalFTE + row.externalFTE).toFixed(2)}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-medium">
-                    {formatNok(row.internalCost + row.externalCost)}
-                  </td>
-                </tr>
+                <React.Fragment key={tag.id}>
+                  <tr className="bg-gray-50">
+                    <td
+                      className="px-4 py-2 text-xs font-semibold uppercase tracking-wide"
+                      style={{ color: tag.color ?? "#374151" }}
+                    >
+                      <span
+                        className="mr-2 inline-block h-2 w-2 rounded-full"
+                        style={{ backgroundColor: tag.color ?? "#9ca3af" }}
+                      />
+                      {tag.name}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-sm font-bold text-gray-700">{formatNok(intCost)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-sm font-bold text-gray-700">{formatNok(extCost)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-sm font-bold text-gray-700">{formatNok(intCost + extCost)}</td>
+                  </tr>
+                  {teamIds.map((teamId) => (
+                    <TeamRow key={teamId} teamId={teamId} />
+                  ))}
+                </React.Fragment>
               );
             })}
+
+            {untaggedTeamIds.length > 0 && (() => {
+              const intCost = untaggedTeamIds.reduce((s, id) => s + (byTeam.get(id)?.internalCost ?? 0), 0);
+              const extCost = untaggedTeamIds.reduce((s, id) => s + (byTeam.get(id)?.externalCost ?? 0), 0);
+              return (
+                <>
+                  <tr className="bg-gray-50">
+                    <td className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Uten merkelapp</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-sm font-bold text-gray-500">{formatNok(intCost)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-sm font-bold text-gray-500">{formatNok(extCost)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-sm font-bold text-gray-500">{formatNok(intCost + extCost)}</td>
+                  </tr>
+                  {untaggedTeamIds.map((teamId) => (
+                    <TeamRow key={teamId} teamId={teamId} />
+                  ))}
+                </>
+              );
+            })()}
           </tbody>
-          <tfoot className="border-t-2 bg-gray-50 font-bold">
-            <tr>
-              <td className="px-4 py-3">Årssum</td>
-              <td className="px-4 py-3 text-right tabular-nums">
-                {Object.values(byMonth)
-                  .reduce((s, m) => s + m.internalFTE, 0)
-                  .toFixed(2)}
-              </td>
-              <td className="px-4 py-3 text-right tabular-nums">
-                {formatNok(totalInternal)}
-              </td>
-              <td className="px-4 py-3 text-right tabular-nums">
-                {Object.values(byMonth)
-                  .reduce((s, m) => s + m.externalFTE, 0)
-                  .toFixed(2)}
-              </td>
-              <td className="px-4 py-3 text-right tabular-nums">
-                {formatNok(totalExternal)}
-              </td>
-              <td className="px-4 py-3 text-right tabular-nums">
-                {Object.values(byMonth)
-                  .reduce((s, m) => s + m.internalFTE + m.externalFTE, 0)
-                  .toFixed(2)}
-              </td>
-              <td className="px-4 py-3 text-right tabular-nums">
-                {formatNok(totalInternal + totalExternal)}
-              </td>
+          <tfoot className="border-t-2 bg-gray-50">
+            <tr className="font-bold">
+              <td className="px-4 py-3">Total portefølje</td>
+              <td className="px-4 py-3 text-right tabular-nums">{formatNok(totalInternal)}</td>
+              <td className="px-4 py-3 text-right tabular-nums">{formatNok(totalExternal)}</td>
+              <td className="px-4 py-3 text-right tabular-nums">{formatNok(totalInternal + totalExternal)}</td>
             </tr>
           </tfoot>
         </table>
+        {byTeam.size === 0 && (
+          <p className="px-4 py-8 text-center text-gray-400">
+            Ingen allokeringer funnet for dette scenariet.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export default async function TeamsPage() {
   const teams = await prisma.team.findMany({
-    include: { teamLead: true },
+    include: { teamLead: true, tags: { include: { tag: true } } },
     orderBy: { name: "asc" },
   });
 
@@ -25,10 +25,12 @@ export default async function TeamsPage() {
             <tr>
               <th className="px-4 py-3">Navn</th>
               <th className="px-4 py-3">Prosjektkode</th>
+              <th className="px-4 py-3">Konto</th>
+              <th className="px-4 py-3">Koststed</th>
               <th className="px-4 py-3">Beskrivelse</th>
               <th className="px-4 py-3">Teamlead</th>
+              <th className="px-4 py-3">Merkelapper</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -43,23 +45,38 @@ export default async function TeamsPage() {
                   {team.projectCode}
                 </td>
                 <td className="px-4 py-3 text-gray-600">
+                  {team.konto ?? "—"}
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  {team.koststed ?? "—"}
+                </td>
+                <td className="px-4 py-3 text-gray-600">
                   {team.description ?? "—"}
                 </td>
                 <td className="px-4 py-3 text-gray-600">
                   {team.teamLead?.name ?? "—"}
                 </td>
                 <td className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1">
+                    {team.tags.map(({ tag }) => (
+                      <span
+                        key={tag.id}
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                        style={
+                          tag.color
+                            ? { backgroundColor: tag.color + "33", color: tag.color }
+                            : { backgroundColor: "#e5e7eb", color: "#374151" }
+                        }
+                      >
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
                   <Badge variant={team.active ? "default" : "secondary"}>
                     {team.active ? "Aktiv" : "Inaktiv"}
                   </Badge>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Link
-                    href={`/teams/${team.id}`}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    Rediger
-                  </Link>
                 </td>
               </tr>
             ))}

@@ -26,6 +26,7 @@ export default async function TeamsReportPage({
   const teams = await prisma.team.findMany({
     where: { active: true },
     orderBy: { name: "asc" },
+    include: { tags: { include: { tag: true } } },
   });
 
   const allocations = await prisma.allocation.findMany({
@@ -92,6 +93,23 @@ export default async function TeamsReportPage({
                 {team.projectCode && (
                   <p className="text-xs text-gray-400">{team.projectCode}</p>
                 )}
+                {team.tags.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {team.tags.map(({ tag }) => (
+                      <span
+                        key={tag.id}
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                        style={
+                          tag.color
+                            ? { backgroundColor: tag.color + "33", color: tag.color }
+                            : { backgroundColor: "#e5e7eb", color: "#374151" }
+                        }
+                      >
+                        {tag.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -112,26 +130,23 @@ export default async function TeamsReportPage({
                 </span>
               </div>
 
-              {/* Stacked bar */}
               <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
                 <div
                   className="h-full flex rounded-full overflow-hidden"
                   style={{ width: `${barWidth}%` }}
                 >
-                  <div
-                    className="bg-blue-500 h-full"
-                    style={{ width: `${internShare}%` }}
-                  />
-                  <div
-                    className="bg-orange-400 h-full"
-                    style={{ width: `${eksternShare}%` }}
-                  />
+                  <div className="bg-blue-500 h-full" style={{ width: `${internShare}%` }} />
+                  <div className="bg-orange-400 h-full" style={{ width: `${eksternShare}%` }} />
                 </div>
               </div>
             </Link>
           );
         })}
       </div>
+
+      {teams.length === 0 && (
+        <p className="text-gray-400">Ingen aktive team funnet.</p>
+      )}
     </div>
   );
 }

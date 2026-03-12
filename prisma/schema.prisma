@@ -55,17 +55,42 @@ model Company {
 // ─── Team ──────────────────────────────────────────────────────────────────
 
 model Team {
-  id           String       @id @default(cuid())
-  name         String
-  description  String?
-  projectCode  String       @unique
-  active       Boolean      @default(true)
-  teamLeadId   String?
-  teamLead     Resource?    @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
-  allocations  Allocation[]
-  otherCosts   OtherCost[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id            String       @id @default(cuid())
+  name          String
+  description   String?
+  projectCode   String       @unique
+  konto         Int?
+  koststed      Int?
+  active        Boolean      @default(true)
+  teamLeadId    String?
+  teamLead      Resource?    @relation("TeamLead",   fields: [teamLeadId],   references: [id], onDelete: SetNull)
+  attestantId   String?
+  attestant     Resource?    @relation("Attestant",  fields: [attestantId],  references: [id], onDelete: SetNull)
+  godkjennerId  String?
+  godkjenner    Resource?    @relation("Godkjenner", fields: [godkjennerId], references: [id], onDelete: SetNull)
+  tags          TeamTag[]
+  allocations   Allocation[]
+  otherCosts    OtherCost[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  color     String?
+  teams     TeamTag[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model TeamTag {
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, tagId])
 }
 
 // ─── Competency ────────────────────────────────────────────────────────────
@@ -97,6 +122,8 @@ model Resource {
   rateCards      RateCard[]
   allocations    Allocation[]
   ledTeams       Team[]               @relation("TeamLead")
+  attestantFor   Team[]               @relation("Attestant")
+  godkjennerFor  Team[]               @relation("Godkjenner")
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 }

@@ -8,10 +8,12 @@ export function ResourceSearch({
   resources,
   defaultValue,
   defaultName,
+  name = "teamLeadId",
 }: {
   resources: Resource[];
   defaultValue: string;
   defaultName: string;
+  name?: string;
 }) {
   const [query, setQuery] = useState(defaultName);
   const [selectedId, setSelectedId] = useState(defaultValue);
@@ -74,7 +76,7 @@ export function ResourceSearch({
 
   return (
     <div className="relative">
-      <input type="hidden" name="teamLeadId" value={selectedId} />
+      <input type="hidden" name={name} value={selectedId} />
 
       <input
         type="text"

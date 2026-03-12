@@ -1,7 +1,15 @@
+import { prisma } from "@/lib/prisma";
 import { createTeam } from "../actions";
+import { ResourceSearch } from "../resource-search";
+import { TagSelector } from "../tag-selector";
 import { redirect } from "next/navigation";
 
-export default function NewTeamPage() {
+export default async function NewTeamPage() {
+  const [resources, tags] = await Promise.all([
+    prisma.resource.findMany({ where: { type: "person" }, orderBy: { name: "asc" } }),
+    prisma.tag.findMany({ orderBy: { name: "asc" } }),
+  ]);
+
   async function handleSubmit(formData: FormData) {
     "use server";
     const result = await createTeam(formData);
@@ -35,6 +43,46 @@ export default function NewTeamPage() {
             rows={3}
             className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Konto</label>
+          <input
+            type="number"
+            name="konto"
+            className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Koststed</label>
+          <input
+            type="number"
+            name="koststed"
+            className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Attestant</label>
+          <ResourceSearch
+            resources={resources.map((r) => ({ id: r.id, name: r.name }))}
+            defaultValue=""
+            defaultName=""
+            name="attestantId"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Godkjenner</label>
+          <ResourceSearch
+            resources={resources.map((r) => ({ id: r.id, name: r.name }))}
+            defaultValue=""
+            defaultName=""
+            name="godkjennerId"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Merkelapper</label>
+          <div className="mt-2">
+            <TagSelector tags={tags} />
+          </div>
         </div>
         <div className="flex gap-3">
           <button

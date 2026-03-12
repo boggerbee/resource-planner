@@ -5,6 +5,7 @@ const navLinks = [
   { href: "/resources", label: "Ressurser" },
   { href: "/companies", label: "Firma" },
   { href: "/competencies", label: "Kompetanser" },
+  { href: "/tags", label: "Merkelapper" },
   { href: "/scenarios", label: "Scenarier" },
   { href: "/allocations", label: "Allokeringer" },
   { href: "/reports/teams", label: "Teamoversikt" },
