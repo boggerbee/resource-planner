@@ -162,16 +162,20 @@ model RateCard {
 // ─── Scenario + PlanningPeriod ─────────────────────────────────────────────
 
 model Scenario {
-  id              String           @id @default(cuid())
-  name            String
-  year            Int
-  status          ScenarioStatus   @default(draft)
-  description     String?
-  planningPeriods PlanningPeriod[]
-  allocations     Allocation[]
-  otherCosts      OtherCost[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                       String           @id @default(cuid())
+  name                     String
+  year                     Int
+  status                   ScenarioStatus   @default(draft)
+  description              String?
+  externalCostOffsetMonths Int              @default(0)
+  prevScenarioId           String?
+  prevScenario             Scenario?        @relation("ScenarioPrev", fields: [prevScenarioId], references: [id], onDelete: SetNull)
+  nextScenarios            Scenario[]       @relation("ScenarioPrev")
+  planningPeriods          PlanningPeriod[]
+  allocations              Allocation[]
+  otherCosts               OtherCost[]
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 
   @@unique([name, year])
 }

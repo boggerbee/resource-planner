@@ -13,6 +13,57 @@ function formatNok(amount: number) {
   }).format(amount);
 }
 
+type TeamCost = { internalCost: number; externalCost: number; name: string; projectCode: string };
+
+function computeCostForAllocation(alloc: {
+  resource: {
+    employmentType: string;
+    rateCards: Array<{
+      costBasis: string;
+      hourlyRateNok: unknown;
+      monthlyRateNok: unknown;
+      vatPct: unknown;
+      invoiceFactor: unknown;
+      effectiveFrom: Date;
+      effectiveTo: Date | null;
+    }>;
+  };
+  planningPeriod: { month: number; year: number; workingHoursNorm: unknown };
+  allocationPct: unknown;
+}): { cost: number; isInternal: boolean } {
+  const { month, year, workingHoursNorm } = alloc.planningPeriod;
+  const pct = Number(alloc.allocationPct);
+  const hoursNorm = Number(workingHoursNorm);
+  const isInternal = alloc.resource.employmentType === "internal";
+
+  const rateCards = alloc.resource.rateCards.map((rc) => ({
+    ...rc,
+    costBasis: rc.costBasis as "hourly" | "monthly",
+    hourlyRateNok: rc.hourlyRateNok ? Number(rc.hourlyRateNok) : null,
+    monthlyRateNok: rc.monthlyRateNok ? Number(rc.monthlyRateNok) : null,
+    vatPct: rc.vatPct ? Number(rc.vatPct) : null,
+    invoiceFactor: rc.invoiceFactor ? Number(rc.invoiceFactor) : null,
+  }));
+
+  const rateCard = resolveRateCard(rateCards, year, month);
+  const cost = rateCard
+    ? computeMonthlyCost({
+        allocationPct: pct,
+        rateCard: {
+          costBasis: rateCard.costBasis,
+          hourlyRateNok: rateCard.hourlyRateNok,
+          monthlyRateNok: rateCard.monthlyRateNok,
+          vatPct: rateCard.vatPct,
+          invoiceFactor: rateCard.invoiceFactor,
+        },
+        employmentType: alloc.resource.employmentType as "internal" | "external",
+        workingHoursNorm: hoursNorm,
+      })
+    : 0;
+
+  return { cost, isInternal };
+}
+
 export default async function PortfolioReportPage({
   searchParams,
 }: {
@@ -34,6 +85,23 @@ export default async function PortfolioReportPage({
     );
   }
 
+  const scenario = await prisma.scenario.findUnique({
+    where: { id: scenarioId },
+    include: {
+      prevScenario: {
+        include: {
+          allocations: {
+            include: {
+              resource: { include: { rateCards: true } },
+              planningPeriod: true,
+              team: { include: { tags: { include: { tag: true } } } },
+            },
+          },
+        },
+      },
+    },
+  });
+
   const allocations = await prisma.allocation.findMany({
     where: { scenarioId },
     include: {
@@ -43,54 +111,21 @@ export default async function PortfolioReportPage({
     },
   });
 
-  // Aggregate annual cost per team, split intern/ekstern
-  type TeamCost = { internalCost: number; externalCost: number; name: string; projectCode: string };
-  const byTeam = new Map<string, TeamCost>();
+  const offset = scenario?.externalCostOffsetMonths ?? 0;
+  const hasPrev = !!scenario?.prevScenario;
 
-  // Also track portfolio-level totals (for summary cards)
+  const byTeam = new Map<string, TeamCost>();
   let totalInternal = 0;
   let totalExternal = 0;
 
-  for (const alloc of allocations) {
-    const { month, year, workingHoursNorm } = alloc.planningPeriod;
-    const pct = Number(alloc.allocationPct);
-    const hoursNorm = Number(workingHoursNorm);
-    const isInternal = alloc.resource.employmentType === "internal";
-
-    const rateCards = alloc.resource.rateCards.map((rc) => ({
-      ...rc,
-      costBasis: rc.costBasis as "hourly" | "monthly",
-      hourlyRateNok: rc.hourlyRateNok ? Number(rc.hourlyRateNok) : null,
-      monthlyRateNok: rc.monthlyRateNok ? Number(rc.monthlyRateNok) : null,
-      vatPct: rc.vatPct ? Number(rc.vatPct) : null,
-      invoiceFactor: rc.invoiceFactor ? Number(rc.invoiceFactor) : null,
-    }));
-
-    const rateCard = resolveRateCard(rateCards, year, month);
-    const cost = rateCard
-      ? computeMonthlyCost({
-          allocationPct: pct,
-          rateCard: {
-            costBasis: rateCard.costBasis,
-            hourlyRateNok: rateCard.hourlyRateNok,
-            monthlyRateNok: rateCard.monthlyRateNok,
-            vatPct: rateCard.vatPct,
-            invoiceFactor: rateCard.invoiceFactor,
-          },
-          employmentType: alloc.resource.employmentType as "internal" | "external",
-          workingHoursNorm: hoursNorm,
-        })
-      : 0;
-
-    if (!byTeam.has(alloc.teamId)) {
-      byTeam.set(alloc.teamId, {
-        internalCost: 0,
-        externalCost: 0,
-        name: alloc.team.name,
-        projectCode: alloc.team.projectCode,
-      });
+  function ensureTeam(teamId: string, teamName: string, projectCode: string) {
+    if (!byTeam.has(teamId)) {
+      byTeam.set(teamId, { internalCost: 0, externalCost: 0, name: teamName, projectCode });
     }
-    const entry = byTeam.get(alloc.teamId)!;
+  }
+
+  function addCost(teamId: string, cost: number, isInternal: boolean) {
+    const entry = byTeam.get(teamId)!;
     if (isInternal) {
       entry.internalCost += cost;
       totalInternal += cost;
@@ -100,8 +135,35 @@ export default async function PortfolioReportPage({
     }
   }
 
+  for (const alloc of allocations) {
+    const { isInternal } = computeCostForAllocation(alloc);
+
+    // With offset=1: external costs shift forward 1 month.
+    // December (month 12) falls into next budget year → skip.
+    // Internal costs are never shifted.
+    if (!isInternal && offset > 0 && alloc.planningPeriod.month > 12 - offset) {
+      continue; // This month's external cost falls into next year
+    }
+
+    const { cost } = computeCostForAllocation(alloc);
+    ensureTeam(alloc.teamId, alloc.team.name, alloc.team.projectCode);
+    addCost(alloc.teamId, cost, isInternal);
+  }
+
+  // Carry-over: December allocations from prevScenario → count as January cost
+  if (offset > 0 && hasPrev && scenario?.prevScenario) {
+    for (const alloc of scenario.prevScenario.allocations) {
+      const isInternal = alloc.resource.employmentType === "internal";
+      if (isInternal) continue; // Only external costs are offset
+      if (alloc.planningPeriod.month !== 12) continue; // Only December carry-over
+
+      const { cost } = computeCostForAllocation(alloc);
+      ensureTeam(alloc.teamId, alloc.team.name, alloc.team.projectCode);
+      addCost(alloc.teamId, cost, false);
+    }
+  }
+
   // Build tag groups — each team goes under its first tag (alphabetically), or "untagged"
-  // We need team→tags mapping from allocations' team data
   const teamTagMap = new Map<string, { id: string; name: string; color: string | null }[]>();
   for (const alloc of allocations) {
     if (!teamTagMap.has(alloc.teamId)) {
@@ -109,6 +171,17 @@ export default async function PortfolioReportPage({
         .map((tt) => tt.tag)
         .sort((a, b) => a.name.localeCompare(b.name));
       teamTagMap.set(alloc.teamId, sorted);
+    }
+  }
+  // Also include teams that only appear via carry-over
+  if (offset > 0 && scenario?.prevScenario) {
+    for (const alloc of scenario.prevScenario.allocations) {
+      if (!teamTagMap.has(alloc.teamId)) {
+        const sorted = alloc.team.tags
+          .map((tt) => tt.tag)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        teamTagMap.set(alloc.teamId, sorted);
+      }
     }
   }
 
@@ -154,7 +227,6 @@ export default async function PortfolioReportPage({
     );
   }
 
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -179,6 +251,15 @@ export default async function PortfolioReportPage({
           </button>
         </form>
       </div>
+
+      {offset > 0 && (
+        <div className="rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+          Ekstern kostnadsforskyving: +{offset} mnd.
+          {hasPrev
+            ? ` Desemberkostnad fra "${scenario?.prevScenario?.name}" er inkludert som januarkostnad.`
+            : " Ingen forrige scenario er koblet — carry-over er ikke tilgjengelig."}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="grid gap-4 md:grid-cols-3">

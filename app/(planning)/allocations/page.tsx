@@ -5,17 +5,24 @@ import { AllocationGrid } from "./allocation-grid";
 export default async function AllocationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scenarioId?: string; teamId?: string }>;
+  searchParams: Promise<{ scenarioId?: string; teamId?: string; onlyEditable?: string }>;
 }) {
   const params = await searchParams;
 
   const [scenarios, teams] = await Promise.all([
-    prisma.scenario.findMany({ orderBy: [{ year: "desc" }, { name: "asc" }] }),
+    prisma.scenario.findMany({
+      orderBy: [{ year: "desc" }, { name: "asc" }],
+      select: { id: true, name: true, year: true, status: true },
+    }),
     prisma.team.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
   ]);
 
-  const scenarioId = params.scenarioId ?? scenarios[0]?.id;
+  const onlyEditable = params.onlyEditable === "1";
+  const editableScenarios = onlyEditable ? scenarios.filter((s) => s.status === "draft") : scenarios;
+  const scenarioId = params.scenarioId ?? editableScenarios[0]?.id ?? scenarios[0]?.id;
   const teamId = params.teamId ?? teams[0]?.id;
+  const selectedScenario = scenarios.find((s) => s.id === scenarioId);
+  const readOnly = selectedScenario?.status === "approved" || selectedScenario?.status === "archived";
 
   if (!scenarioId || !teamId) {
     return (
@@ -109,11 +116,18 @@ export default async function AllocationsPage({
         <h1 className="text-2xl font-bold">Allokeringer</h1>
       </div>
 
+      {readOnly && (
+        <div className="rounded border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          Dette scenariet er {selectedScenario?.status === "approved" ? "godkjent" : "arkivert"} og kan ikke endres. Opprett en kopi for å gjøre endringer.
+        </div>
+      )}
+
       <AllocationFilters
         scenarios={scenarios}
         teams={teams}
         scenarioId={scenarioId}
         teamId={teamId}
+        onlyEditable={onlyEditable}
       />
 
       <AllocationGrid
@@ -123,6 +137,7 @@ export default async function AllocationsPage({
         scenarioId={scenarioId}
         teamId={teamId}
         availableResources={availableResources}
+        readOnly={readOnly}
       />
     </div>
   );

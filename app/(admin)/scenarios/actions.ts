@@ -9,6 +9,8 @@ const ScenarioSchema = z.object({
   year: z.coerce.number().int().min(2020).max(2099),
   status: z.enum(["draft", "approved", "archived"]),
   description: z.string().optional(),
+  externalCostOffsetMonths: z.coerce.number().int().min(0).max(12).default(0),
+  prevScenarioId: z.string().optional().nullable(),
 });
 
 export async function createScenario(formData: FormData) {
@@ -17,21 +19,31 @@ export async function createScenario(formData: FormData) {
     year: formData.get("year"),
     status: formData.get("status"),
     description: formData.get("description") || undefined,
+    externalCostOffsetMonths: formData.get("externalCostOffsetMonths") || 0,
+    prevScenarioId: formData.get("prevScenarioId") || null,
   });
 
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { name, year, status, description } = parsed.data;
+  const { name, year, status, description, externalCostOffsetMonths, prevScenarioId } = parsed.data;
 
-  await prisma.$transaction([
-    prisma.scenario.create({
+  await prisma.$transaction(async (tx) => {
+    if (status === "approved") {
+      await tx.scenario.updateMany({
+        where: { year, status: "approved" },
+        data: { status: "archived" },
+      });
+    }
+    await tx.scenario.create({
       data: {
         name,
         year,
         status,
         description,
+        externalCostOffsetMonths,
+        prevScenarioId: prevScenarioId || null,
         planningPeriods: {
           create: Array.from({ length: 12 }, (_, i) => ({
             year,
@@ -40,8 +52,8 @@ export async function createScenario(formData: FormData) {
           })),
         },
       },
-    }),
-  ]);
+    });
+  });
 
   revalidatePath("/scenarios");
 }
@@ -52,17 +64,41 @@ export async function updateScenario(id: string, formData: FormData) {
     year: formData.get("year"),
     status: formData.get("status"),
     description: formData.get("description") || undefined,
+    externalCostOffsetMonths: formData.get("externalCostOffsetMonths") || 0,
+    prevScenarioId: formData.get("prevScenarioId") || null,
   });
 
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  await prisma.scenario.update({
-    where: { id },
-    data: parsed.data,
+  const { name, year, status, description, externalCostOffsetMonths, prevScenarioId } = parsed.data;
+
+  await prisma.$transaction(async (tx) => {
+    if (status === "approved") {
+      await tx.scenario.updateMany({
+        where: { year, status: "approved", id: { not: id } },
+        data: { status: "archived" },
+      });
+    }
+    await tx.scenario.update({
+      where: { id },
+      data: { name, year, status, description, externalCostOffsetMonths, prevScenarioId: prevScenarioId || null },
+    });
   });
 
+  revalidatePath("/scenarios");
+}
+
+export async function approveScenario(id: string) {
+  const scenario = await prisma.scenario.findUniqueOrThrow({ where: { id } });
+  await prisma.$transaction([
+    prisma.scenario.updateMany({
+      where: { year: scenario.year, status: "approved", id: { not: id } },
+      data: { status: "archived" },
+    }),
+    prisma.scenario.update({ where: { id }, data: { status: "approved" } }),
+  ]);
   revalidatePath("/scenarios");
 }
 
@@ -103,6 +139,8 @@ export async function copyScenario(
         year,
         status: "draft",
         description: source.description ?? undefined,
+        externalCostOffsetMonths: source.externalCostOffsetMonths,
+        prevScenarioId: source.prevScenarioId ?? null,
       },
     });
 

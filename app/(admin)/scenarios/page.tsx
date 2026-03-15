@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { approveScenario } from "./actions";
 
 const statusLabel: Record<string, string> = {
   draft: "Utkast",
@@ -16,7 +17,10 @@ const statusVariant: Record<string, "secondary" | "default" | "outline"> = {
 
 export default async function ScenariosPage() {
   const scenarios = await prisma.scenario.findMany({
-    include: { _count: { select: { allocations: true } } },
+    include: {
+      _count: { select: { allocations: true } },
+      prevScenario: true,
+    },
     orderBy: [{ year: "desc" }, { name: "asc" }],
   });
 
@@ -38,7 +42,8 @@ export default async function ScenariosPage() {
               <th className="px-4 py-3">Navn</th>
               <th className="px-4 py-3">År</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Beskrivelse</th>
+              <th className="px-4 py-3">Offset</th>
+              <th className="px-4 py-3">Forrige scenario</th>
               <th className="px-4 py-3">Allokeringer</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -57,15 +62,40 @@ export default async function ScenariosPage() {
                     {statusLabel[scenario.status] ?? scenario.status}
                   </Badge>
                 </td>
-                <td className="px-4 py-3 text-gray-600">{scenario.description ?? "—"}</td>
+                <td className="px-4 py-3 text-gray-600">
+                  {scenario.externalCostOffsetMonths > 0
+                    ? `+${scenario.externalCostOffsetMonths} mnd`
+                    : "—"}
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  {scenario.prevScenario ? (
+                    <Link
+                      href={`/scenarios/${scenario.prevScenario.id}`}
+                      className="hover:underline text-blue-600"
+                    >
+                      {scenario.prevScenario.name} ({scenario.prevScenario.year})
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-4 py-3 text-gray-600">{scenario._count.allocations}</td>
                 <td className="px-4 py-3 text-right">
-                  <Link
-                    href={`/scenarios/${scenario.id}`}
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    Rediger
-                  </Link>
+                  {scenario.status !== "approved" && (
+                    <form
+                      action={async () => {
+                        "use server";
+                        await approveScenario(scenario.id);
+                      }}
+                    >
+                      <button
+                        type="submit"
+                        className="text-sm text-green-700 hover:underline"
+                      >
+                        Godkjenn
+                      </button>
+                    </form>
+                  )}
                 </td>
               </tr>
             ))}

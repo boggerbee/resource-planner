@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
-import { updateScenario, deleteScenario, copyScenario } from "../actions";
+import { updateScenario, deleteScenario, copyScenario, approveScenario } from "../actions";
 
 export default async function EditScenarioPage({
   params,
@@ -10,11 +10,20 @@ export default async function EditScenarioPage({
   const { id } = await params;
   const scenario = await prisma.scenario.findUnique({
     where: { id },
-    include: { _count: { select: { allocations: true } } },
+    include: {
+      _count: { select: { allocations: true } },
+      prevScenario: true,
+    },
   });
   if (!scenario) notFound();
 
   const hasAllocations = scenario._count.allocations > 0;
+
+  // Approved scenarios for year-1 as prevScenario candidates
+  const prevCandidates = await prisma.scenario.findMany({
+    where: { status: "approved", year: scenario.year - 1 },
+    orderBy: { name: "asc" },
+  });
 
   async function handleUpdate(formData: FormData) {
     "use server";
@@ -32,6 +41,12 @@ export default async function EditScenarioPage({
     "use server";
     const result = await copyScenario(id, formData);
     if (result.newId) redirect(`/scenarios/${result.newId}`);
+  }
+
+  async function handleApprove() {
+    "use server";
+    await approveScenario(id);
+    redirect("/scenarios");
   }
 
   return (
@@ -80,6 +95,42 @@ export default async function EditScenarioPage({
             className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Ekstern kostnadsforskyving (måneder)
+          </label>
+          <input
+            name="externalCostOffsetMonths"
+            type="number"
+            min={0}
+            max={12}
+            defaultValue={scenario.externalCostOffsetMonths}
+            className="mt-1 w-32 rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            0 = ingen forskyving. 1 = ekstern kostnad bokføres måneden etter levering.
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Forrige godkjente scenario (carry-over)
+          </label>
+          <select
+            name="prevScenarioId"
+            defaultValue={scenario.prevScenarioId ?? ""}
+            className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">— Ingen —</option>
+            {prevCandidates.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.year})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            Brukes til carry-over av desemberkostnader ved ekstern kostnadsforskyving.
+          </p>
+        </div>
         <div className="flex gap-3 pt-2">
           <button
             type="submit"
@@ -92,6 +143,24 @@ export default async function EditScenarioPage({
           </a>
         </div>
       </form>
+
+      {scenario.status !== "approved" && (
+        <div className="rounded border border-green-200 bg-green-50 p-4">
+          <p className="text-sm font-medium text-green-800">Godkjenning</p>
+          <p className="mt-1 text-xs text-green-700">
+            Godkjenner dette scenariet som styringsgrunnlag for {scenario.year}. Andre godkjente
+            scenarioer for samme år arkiveres automatisk.
+          </p>
+          <form action={handleApprove} className="mt-3">
+            <button
+              type="submit"
+              className="rounded border border-green-600 bg-white px-3 py-1.5 text-sm text-green-700 hover:bg-green-100"
+            >
+              Godkjenn scenario
+            </button>
+          </form>
+        </div>
+      )}
 
       <div className="rounded border bg-white p-6 space-y-4">
         <div>

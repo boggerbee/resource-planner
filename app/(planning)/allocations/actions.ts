@@ -3,6 +3,16 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+async function assertNotApproved(scenarioId: string) {
+  const scenario = await prisma.scenario.findUnique({
+    where: { id: scenarioId },
+    select: { status: true },
+  });
+  if (scenario?.status === "approved" || scenario?.status === "archived") {
+    throw new Error("Godkjente og arkiverte scenarier kan ikke endres.");
+  }
+}
+
 export async function upsertAllocations(
   scenarioId: string,
   teamId: string,
@@ -10,6 +20,8 @@ export async function upsertAllocations(
   /** months[0] = januar (1-indexed key), value 0–100 as percent */
   monthValues: Record<number, number>
 ) {
+  await assertNotApproved(scenarioId);
+
   // Fetch all planning periods for this scenario
   const periods = await prisma.planningPeriod.findMany({
     where: { scenarioId },
@@ -58,6 +70,7 @@ export async function removeResourceFromTeam(
   teamId: string,
   resourceId: string
 ) {
+  await assertNotApproved(scenarioId);
   await prisma.allocation.deleteMany({
     where: { scenarioId, teamId, resourceId },
   });

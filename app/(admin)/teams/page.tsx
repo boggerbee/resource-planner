@@ -61,7 +61,7 @@ export default async function TeamsPage() {
                     {team.tags.map(({ tag }) => (
                       <span
                         key={tag.id}
-                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
                         style={
                           tag.color
                             ? { backgroundColor: tag.color + "33", color: tag.color }

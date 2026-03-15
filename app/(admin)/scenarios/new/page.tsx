@@ -1,8 +1,15 @@
+import { prisma } from "@/lib/prisma";
 import { createScenario } from "../actions";
 import { redirect } from "next/navigation";
 
-export default function NewScenarioPage() {
+export default async function NewScenarioPage() {
   const currentYear = new Date().getFullYear();
+
+  // Fetch approved scenarios for year-1 as prevScenario candidates
+  const prevCandidates = await prisma.scenario.findMany({
+    where: { status: "approved", year: currentYear - 1 },
+    orderBy: { name: "asc" },
+  });
 
   async function handleSubmit(formData: FormData) {
     "use server";
@@ -53,6 +60,41 @@ export default function NewScenarioPage() {
             rows={3}
             className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Ekstern kostnadsforskyving (måneder)
+          </label>
+          <input
+            name="externalCostOffsetMonths"
+            type="number"
+            min={0}
+            max={12}
+            defaultValue={0}
+            className="mt-1 w-32 rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            0 = ingen forskyving. 1 = ekstern kostnad bokføres måneden etter levering.
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Forrige godkjente scenario (carry-over)
+          </label>
+          <select
+            name="prevScenarioId"
+            className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">— Ingen —</option>
+            {prevCandidates.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.year})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            Brukes til carry-over av desemberkostnader ved ekstern kostnadsforskyving.
+          </p>
         </div>
         <p className="text-xs text-gray-500">
           12 planperioder (januar–desember) opprettes automatisk med 162 t/mnd.

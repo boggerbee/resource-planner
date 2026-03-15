@@ -24,6 +24,7 @@ interface Props {
   scenarioId: string;
   teamId: string;
   availableResources: Resource[];
+  readOnly?: boolean;
 }
 
 // ─── Edit row (inline måneds-input) ────────────────────────────────────────
@@ -324,6 +325,7 @@ export function AllocationGrid({
   scenarioId,
   teamId,
   availableResources: initialAvailable,
+  readOnly = false,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   // Track newly added resources (not yet in DB) locally until saved
@@ -389,8 +391,8 @@ export function AllocationGrid({
             return (
               <Fragment key={resource.id}>
                 <tr
-                  className={`cursor-pointer ${isEditing ? "bg-blue-50" : "hover:bg-gray-50"}`}
-                  onClick={() => setEditingId(isEditing ? null : resource.id)}
+                  className={`${readOnly ? "cursor-default" : "cursor-pointer"} ${isEditing ? "bg-blue-50" : "hover:bg-gray-50"}`}
+                  onClick={() => !readOnly && setEditingId(isEditing ? null : resource.id)}
                 >
                   <td className="px-4 py-3 font-medium">
                     <span className="flex items-center gap-1.5">
@@ -490,12 +492,14 @@ export function AllocationGrid({
       )}
       </div>
 
-      <div className="px-1">
-        <AddResourcePanel
-          availableResources={available}
-          onAdded={handleAddResource}
-        />
-      </div>
+      {!readOnly && (
+        <div className="px-1">
+          <AddResourcePanel
+            availableResources={available}
+            onAdded={handleAddResource}
+          />
+        </div>
+      )}
     </div>
   );
 }
