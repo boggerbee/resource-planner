@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 type Scenario = { id: string; name: string; year: number; status: string };
 type Team = { id: string; name: string };
@@ -30,6 +30,10 @@ export function AllocationFilters({
     visibleScenarios.some((s) => s.id === scenarioId)
       ? scenarioId
       : (visibleScenarios[0]?.id ?? scenarioId);
+
+  useEffect(() => {
+    document.cookie = `lastAllocationScenario=${effectiveScenarioId}; path=/; max-age=31536000`;
+  }, [effectiveScenarioId]);
 
   return (
     <form ref={formRef} className="flex flex-wrap items-end gap-4 rounded border bg-white p-4">

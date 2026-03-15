@@ -214,6 +214,14 @@ model Allocation {
   @@unique([scenarioId, teamId, resourceId, planningPeriodId])
 }
 
+// ─── System settings ───────────────────────────────────────────────────────
+
+model SystemSettings {
+  id                        String   @id @default("singleton")
+  defaultInternalHourlyRate Decimal? @db.Decimal(10, 2)
+  updatedAt                 DateTime @updatedAt
+}
+
 // ─── Other costs ───────────────────────────────────────────────────────────
 
 model OtherCost {

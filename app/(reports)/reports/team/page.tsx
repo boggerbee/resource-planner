@@ -49,7 +49,7 @@ export default async function TeamReportPage({
   });
 
   // Build month × resource cost+fte table
-  type ResourceMonth = { name: string; employmentType: string; months: Record<number, { cost: number; fte: number }> };
+  type ResourceMonth = { name: string; employmentType: string; months: Record<number, { cost: number; fte: number; missingRate: boolean }> };
   const resourceMap = new Map<string, ResourceMonth>();
 
   for (const alloc of allocations) {
@@ -85,7 +85,7 @@ export default async function TeamReportPage({
       });
     }
     const rm = resourceMap.get(alloc.resourceId)!;
-    rm.months[month] = { cost, fte: pct };
+    rm.months[month] = { cost, fte: pct, missingRate: !rateCard };
   }
 
   const rows = Array.from(resourceMap.values());
@@ -153,9 +153,18 @@ export default async function TeamReportPage({
                     return (
                       <td key={m} className="px-2 py-3 text-right tabular-nums text-xs">
                         {entry ? (
-                          <span title={`${Math.round(entry.fte * 100)}% FTE`}>
-                            {formatNok(entry.cost)}
-                          </span>
+                          entry.missingRate ? (
+                            <span
+                              className="inline-flex items-center gap-1 text-orange-600"
+                              title={`${Math.round(entry.fte * 100)}% FTE — mangler ratekort, kostnad satt til kr 0`}
+                            >
+                              ⚠ kr 0
+                            </span>
+                          ) : (
+                            <span title={`${Math.round(entry.fte * 100)}% FTE`}>
+                              {formatNok(entry.cost)}
+                            </span>
+                          )
                         ) : (
                           <span className="text-gray-300">—</span>
                         )}

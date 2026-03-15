@@ -4,6 +4,7 @@ import {
   computeMonthlyCost,
   resolveRateCard,
 } from "@/lib/domain/calculations";
+import { ScenarioSelect } from "./ScenarioSelect";
 
 function formatNok(amount: number) {
   return new Intl.NumberFormat("nb-NO", {
@@ -208,10 +209,13 @@ export default async function PortfolioReportPage({
 
   function TeamRow({ teamId }: { teamId: string }) {
     const team = byTeam.get(teamId)!;
+    const allocUrl = `/allocations?scenarioId=${scenarioId}&teamId=${teamId}`;
     return (
       <tr className="hover:bg-gray-50">
         <td className="py-2.5 pl-8 pr-4 text-sm">
-          <span className="font-medium">{team.name}</span>
+          <a href={allocUrl} className="font-medium hover:underline hover:text-blue-600">
+            {team.name}
+          </a>
           <span className="ml-2 text-xs text-gray-400">{team.projectCode}</span>
         </td>
         <td className="px-4 py-2.5 text-right tabular-nums text-sm">
@@ -231,24 +235,8 @@ export default async function PortfolioReportPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Porteføljeoversikt</h1>
-        <form className="flex gap-2">
-          <select
-            name="scenarioId"
-            defaultValue={scenarioId}
-            className="rounded border px-2 py-1 text-sm"
-          >
-            {scenarios.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.year})
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="rounded bg-gray-800 px-3 py-1 text-sm text-white"
-          >
-            Vis
-          </button>
+        <form>
+          <ScenarioSelect scenarios={scenarios} selectedId={scenarioId} />
         </form>
       </div>
 

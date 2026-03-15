@@ -87,7 +87,13 @@ function EditRow({
       <td colSpan={activeMonths.length + 4} className="px-4 py-4">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-medium text-gray-800">{resource.name}</span>
+            <a
+              href={`/resources/${resource.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="font-medium text-gray-800 hover:underline hover:text-blue-600"
+            >
+              {resource.name}
+            </a>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Sett alle til:</span>
               {[0, 25, 50, 75, 100].map((v) => (
