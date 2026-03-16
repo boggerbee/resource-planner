@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
-import { updateScenario, deleteScenario, copyScenario, approveScenario } from "../actions";
+import { updateScenario, deleteScenario, copyScenario, approveScenario, updatePlanningPeriods } from "../actions";
+
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Des"];
 
 export default async function EditScenarioPage({
   params,
@@ -13,6 +15,7 @@ export default async function EditScenarioPage({
     include: {
       _count: { select: { allocations: true } },
       prevScenario: true,
+      planningPeriods: { orderBy: { month: "asc" } },
     },
   });
   if (!scenario) notFound();
@@ -47,6 +50,11 @@ export default async function EditScenarioPage({
     "use server";
     await approveScenario(id);
     redirect("/scenarios");
+  }
+
+  async function handleUpdatePeriods(formData: FormData) {
+    "use server";
+    await updatePlanningPeriods(id, formData);
   }
 
   return (
@@ -199,6 +207,45 @@ export default async function EditScenarioPage({
           >
             Opprett kopi
           </button>
+        </form>
+      </div>
+
+      <div className="rounded border bg-white p-6 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-gray-700">Arbeidstimer per måned</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Justér arbeidstimer for måneder med færre arbeidsdager (f.eks. jul, påske).
+          </p>
+        </div>
+        <form action={handleUpdatePeriods}>
+          <div className="overflow-x-auto">
+            <div className="flex gap-2 min-w-max">
+              {scenario.planningPeriods.map((period) => (
+                <div key={period.id} className="flex flex-col items-center gap-1">
+                  <label className="text-xs text-gray-500 font-medium">
+                    {MONTH_NAMES[period.month - 1]}
+                  </label>
+                  <input
+                    name={`hours_${period.month}`}
+                    type="number"
+                    min={1}
+                    step={0.5}
+                    defaultValue={Number(period.workingHoursNorm)}
+                    readOnly={scenario.status === "approved"}
+                    className="w-16 rounded border px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500 read-only:bg-gray-50 read-only:text-gray-500"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+          {scenario.status !== "approved" && (
+            <button
+              type="submit"
+              className="mt-3 rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+            >
+              Lagre timer
+            </button>
+          )}
         </form>
       </div>
 

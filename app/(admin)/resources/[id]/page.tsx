@@ -49,6 +49,9 @@ export default async function EditResourcePage({
         employmentType: resource.employmentType,
         companyId: resource.companyId,
         primaryRole: resource.primaryRole,
+        department: resource.department,
+        activeFrom: resource.activeFrom ?? null,
+        activeTo: resource.activeTo ?? null,
         notes: resource.notes,
         rateCards: resource.rateCards.map((rc) => ({
           id: rc.id,

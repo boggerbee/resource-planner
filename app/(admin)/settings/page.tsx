@@ -31,6 +31,58 @@ export default async function SettingsPage() {
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Standard stillingsprosent — intern (%)
+          </label>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Pre-fyller stillingsprosent når du legger til ratekort for interne ressurser.
+          </p>
+          <div className="mt-1 flex items-center gap-1">
+            <input
+              name="defaultInternalInvoiceFactorPct"
+              type="number"
+              min="0"
+              max="200"
+              step="1"
+              defaultValue={
+                settings?.defaultInternalInvoiceFactor != null
+                  ? (Number(settings.defaultInternalInvoiceFactor) * 100).toFixed(0)
+                  : ""
+              }
+              placeholder="100"
+              className="w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-500">%</span>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Standard faktureringsgrad — ekstern (%)
+          </label>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Pre-fyller faktureringsgrad når du legger til ratekort for eksterne ressurser.
+          </p>
+          <div className="mt-1 flex items-center gap-1">
+            <input
+              name="defaultExternalInvoiceFactorPct"
+              type="number"
+              min="0"
+              max="200"
+              step="1"
+              defaultValue={
+                settings?.defaultExternalInvoiceFactor != null
+                  ? (Number(settings.defaultExternalInvoiceFactor) * 100).toFixed(0)
+                  : ""
+              }
+              placeholder="100"
+              className="w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-500">%</span>
+          </div>
+        </div>
+
         <div className="pt-2">
           <button
             type="submit"
@@ -40,6 +92,18 @@ export default async function SettingsPage() {
           </button>
         </div>
       </form>
+      <div className="rounded border border-blue-100 bg-blue-50 p-5 text-xs text-blue-900 space-y-2">
+        <p className="font-semibold text-sm">Beregning av månedskostnad</p>
+        <p className="font-mono bg-white/60 rounded px-2 py-1">
+          Ekstern: timepris × arbeidstimer × allokering% × fakturafaktor
+        </p>
+        <p className="font-mono bg-white/60 rounded px-2 py-1">
+          Intern: timepris × arbeidstimer × allokering%
+        </p>
+        <p className="text-blue-700">
+          Arbeidstimer og fakturafaktor settes per scenario under fanen «Scenarier».
+        </p>
+      </div>
     </div>
   );
 }

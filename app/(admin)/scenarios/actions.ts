@@ -56,6 +56,8 @@ export async function createScenario(formData: FormData) {
   });
 
   revalidatePath("/scenarios");
+  revalidatePath("/reports/portfolio");
+  revalidatePath("/reports/team");
 }
 
 export async function updateScenario(id: string, formData: FormData) {
@@ -88,6 +90,8 @@ export async function updateScenario(id: string, formData: FormData) {
   });
 
   revalidatePath("/scenarios");
+  revalidatePath("/reports/portfolio");
+  revalidatePath("/reports/team");
 }
 
 export async function approveScenario(id: string) {
@@ -100,6 +104,8 @@ export async function approveScenario(id: string) {
     prisma.scenario.update({ where: { id }, data: { status: "approved" } }),
   ]);
   revalidatePath("/scenarios");
+  revalidatePath("/reports/portfolio");
+  revalidatePath("/reports/team");
 }
 
 const CopySchema = z.object({
@@ -176,7 +182,21 @@ export async function copyScenario(
   });
 
   revalidatePath("/scenarios");
+  revalidatePath("/reports/portfolio");
+  revalidatePath("/reports/team");
   return { newId: newScenario.id };
+}
+
+export async function updatePlanningPeriods(scenarioId: string, formData: FormData) {
+  for (let month = 1; month <= 12; month++) {
+    const hours = parseFloat(formData.get(`hours_${month}`) as string);
+    if (isNaN(hours) || hours <= 0) continue;
+    await prisma.planningPeriod.updateMany({
+      where: { scenarioId, month },
+      data: { workingHoursNorm: hours },
+    });
+  }
+  revalidatePath(`/scenarios/${scenarioId}`);
 }
 
 export async function deleteScenario(id: string) {

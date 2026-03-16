@@ -24,6 +24,9 @@ interface Resource {
   employmentType: "internal" | "external";
   companyId: string;
   primaryRole: string | null;
+  department: string | null;
+  activeFrom: Date | null;
+  activeTo: Date | null;
   notes: string | null;
   rateCards: RateCard[];
 }
@@ -108,12 +111,42 @@ export function ResourceEditClient({
             </select>
           </div>
 
-          <div className="col-span-2">
+          <div>
             <label className="block text-sm font-medium text-gray-700">Primærrolle</label>
             <input
               name="primaryRole"
               defaultValue={resource.primaryRole ?? ""}
               placeholder="f.eks. Fullstackutvikler"
+              className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Avdeling</label>
+            <input
+              name="department"
+              defaultValue={resource.department ?? ""}
+              placeholder="f.eks. Teknologi"
+              className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Startdato</label>
+            <input
+              name="activeFrom"
+              type="date"
+              defaultValue={resource.activeFrom ? resource.activeFrom.toISOString().slice(0, 10) : ""}
+              className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Sluttdato</label>
+            <input
+              name="activeTo"
+              type="date"
+              defaultValue={resource.activeTo ? resource.activeTo.toISOString().slice(0, 10) : ""}
               className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

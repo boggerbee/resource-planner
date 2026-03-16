@@ -115,6 +115,7 @@ model Resource {
   companyId      String
   company        Company              @relation(fields: [companyId], references: [id])
   primaryRole    String?
+  department     String?
   activeFrom     DateTime?
   activeTo       DateTime?
   notes          String?
@@ -217,9 +218,11 @@ model Allocation {
 // ─── System settings ───────────────────────────────────────────────────────
 
 model SystemSettings {
-  id                        String   @id @default("singleton")
-  defaultInternalHourlyRate Decimal? @db.Decimal(10, 2)
-  updatedAt                 DateTime @updatedAt
+  id                           String   @id @default("singleton")
+  defaultInternalHourlyRate    Decimal? @db.Decimal(10, 2)
+  defaultInternalInvoiceFactor Decimal? @db.Decimal(5, 4)
+  defaultExternalInvoiceFactor Decimal? @db.Decimal(5, 4)
+  updatedAt                    DateTime @updatedAt
 }
 
 // ─── Other costs ───────────────────────────────────────────────────────────

@@ -127,10 +127,10 @@ export default async function ResourcesPage({
             <tr>
               <th className="px-4 py-3">Navn</th>
               <th className="px-4 py-3">Firma</th>
+              <th className="px-4 py-3">Avdeling</th>
               <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3">Ansettelse</th>
               <th className="px-4 py-3">Primærrolle</th>
-              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -142,6 +142,7 @@ export default async function ResourcesPage({
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-gray-600">{r.company.name}</td>
+                <td className="px-4 py-3 text-gray-600">{r.department ?? "—"}</td>
                 <td className="px-4 py-3">
                   <Badge variant={r.type === "placeholder" ? "secondary" : "outline"}>
                     {r.type === "placeholder" ? "Placeholder" : "Person"}
@@ -153,11 +154,6 @@ export default async function ResourcesPage({
                   </Badge>
                 </td>
                 <td className="px-4 py-3 text-gray-600">{r.primaryRole ?? "—"}</td>
-                <td className="px-4 py-3 text-right">
-                  <Link href={`/resources/${r.id}?back=${encodeURIComponent(backUrl)}`} className="text-sm text-blue-600 hover:underline">
-                    Rediger
-                  </Link>
-                </td>
               </tr>
             ))}
           </tbody>

@@ -14,6 +14,35 @@ function formatNok(amount: number) {
   }).format(amount);
 }
 
+type RateCardInput = {
+  costBasis: "hourly" | "monthly";
+  hourlyRateNok: number | null;
+  monthlyRateNok: number | null;
+  vatPct: number | null;
+  invoiceFactor: number | null;
+  effectiveFrom: Date;
+  effectiveTo: Date | null;
+};
+
+function mapRateCards(rateCards: Array<{
+  costBasis: string;
+  hourlyRateNok: unknown;
+  monthlyRateNok: unknown;
+  vatPct: unknown;
+  invoiceFactor: unknown;
+  effectiveFrom: Date;
+  effectiveTo: Date | null;
+}>): RateCardInput[] {
+  return rateCards.map((rc) => ({
+    ...rc,
+    costBasis: rc.costBasis as "hourly" | "monthly",
+    hourlyRateNok: rc.hourlyRateNok ? Number(rc.hourlyRateNok) : null,
+    monthlyRateNok: rc.monthlyRateNok ? Number(rc.monthlyRateNok) : null,
+    vatPct: rc.vatPct ? Number(rc.vatPct) : null,
+    invoiceFactor: rc.invoiceFactor ? Number(rc.invoiceFactor) : null,
+  }));
+}
+
 export default async function TeamReportPage({
   searchParams,
 }: {
@@ -39,35 +68,59 @@ export default async function TeamReportPage({
 
   const team = teams.find((t) => t.id === teamId);
 
-  const allocations = await prisma.allocation.findMany({
-    where: { scenarioId, teamId },
-    include: {
-      resource: { include: { rateCards: true } },
-      planningPeriod: true,
-    },
-    orderBy: [{ planningPeriod: { month: "asc" } }, { resource: { name: "asc" } }],
-  });
+  const [allocations, scenario] = await Promise.all([
+    prisma.allocation.findMany({
+      where: { scenarioId, teamId },
+      include: {
+        resource: { include: { rateCards: true } },
+        planningPeriod: true,
+      },
+      orderBy: [{ planningPeriod: { month: "asc" } }, { resource: { name: "asc" } }],
+    }),
+    prisma.scenario.findUnique({
+      where: { id: scenarioId },
+      include: {
+        prevScenario: {
+          include: {
+            allocations: {
+              where: { teamId },
+              include: {
+                resource: { include: { rateCards: true } },
+                planningPeriod: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  const offset = scenario?.externalCostOffsetMonths ?? 0;
+  const hasPrev = !!scenario?.prevScenario;
 
   // Build month × resource cost+fte table
   type ResourceMonth = { name: string; employmentType: string; months: Record<number, { cost: number; fte: number; missingRate: boolean }> };
   const resourceMap = new Map<string, ResourceMonth>();
 
+  function ensureResource(id: string, name: string, employmentType: string) {
+    if (!resourceMap.has(id)) {
+      resourceMap.set(id, { name, employmentType, months: {} });
+    }
+  }
+
+  // Current scenario allocations — apply offset for external resources
   for (const alloc of allocations) {
-    const month = alloc.planningPeriod.month;
+    const deliveryMonth = alloc.planningPeriod.month;
     const year = alloc.planningPeriod.year;
     const pct = Number(alloc.allocationPct);
     const hoursNorm = Number(alloc.planningPeriod.workingHoursNorm);
+    const isExternal = alloc.resource.employmentType !== "internal";
 
-    const rateCards = alloc.resource.rateCards.map((rc) => ({
-      ...rc,
-      costBasis: rc.costBasis as "hourly" | "monthly",
-      hourlyRateNok: rc.hourlyRateNok ? Number(rc.hourlyRateNok) : null,
-      monthlyRateNok: rc.monthlyRateNok ? Number(rc.monthlyRateNok) : null,
-      vatPct: rc.vatPct ? Number(rc.vatPct) : null,
-      invoiceFactor: rc.invoiceFactor ? Number(rc.invoiceFactor) : null,
-    }));
+    // With offset > 0, exclude external deliveries in the last `offset` months (same as portfolio report)
+    if (isExternal && offset > 0 && deliveryMonth > 12 - offset) continue;
 
-    const rateCard = resolveRateCard(rateCards, year, month);
+    const rateCards = mapRateCards(alloc.resource.rateCards);
+    const rateCard = resolveRateCard(rateCards, year, deliveryMonth);
     const cost = rateCard
       ? computeMonthlyCost({
           allocationPct: pct,
@@ -77,15 +130,46 @@ export default async function TeamReportPage({
         })
       : 0;
 
-    if (!resourceMap.has(alloc.resourceId)) {
-      resourceMap.set(alloc.resourceId, {
-        name: alloc.resource.name,
-        employmentType: alloc.resource.employmentType,
-        months: {},
-      });
+    ensureResource(alloc.resourceId, alloc.resource.name, alloc.resource.employmentType);
+    resourceMap.get(alloc.resourceId)!.months[deliveryMonth] = {
+      cost,
+      fte: pct,
+      missingRate: !rateCard,
+    };
+  }
+
+  // Carry-over: December allocations from prevScenario → January of this year
+  if (offset > 0 && scenario?.prevScenario) {
+    for (const prevAlloc of scenario.prevScenario.allocations) {
+      if (prevAlloc.planningPeriod.month !== 12) continue;
+      if (prevAlloc.resource.employmentType === "internal") continue;
+
+      const pct = Number(prevAlloc.allocationPct);
+      const hoursNorm = Number(prevAlloc.planningPeriod.workingHoursNorm);
+      const prevYear = prevAlloc.planningPeriod.year;
+
+      const rateCards = mapRateCards(prevAlloc.resource.rateCards);
+      const rateCard = resolveRateCard(rateCards, prevYear, 12);
+      const cost = rateCard
+        ? computeMonthlyCost({
+            allocationPct: pct,
+            rateCard,
+            employmentType: "external",
+            workingHoursNorm: hoursNorm,
+          })
+        : 0;
+
+      ensureResource(prevAlloc.resourceId, prevAlloc.resource.name, prevAlloc.resource.employmentType);
+      // bookingMonth = 1 (January): December delivery from prev year → January booking
+      const existing = resourceMap.get(prevAlloc.resourceId)!.months[1];
+      if (existing) {
+        existing.cost += cost;
+        existing.fte += pct;
+        if (!rateCard) existing.missingRate = true;
+      } else {
+        resourceMap.get(prevAlloc.resourceId)!.months[1] = { cost, fte: pct, missingRate: !rateCard };
+      }
     }
-    const rm = resourceMap.get(alloc.resourceId)!;
-    rm.months[month] = { cost, fte: pct, missingRate: !rateCard };
   }
 
   const rows = Array.from(resourceMap.values());
@@ -120,6 +204,15 @@ export default async function TeamReportPage({
           <button type="submit" className="rounded bg-gray-800 px-3 py-1 text-sm text-white">Vis</button>
         </form>
       </div>
+
+      {offset > 0 && (
+        <div className="rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
+          Ekstern kostnadsforskyving: +{offset} mnd. — eksterne kostnader vises i bokföringsmåned.
+          {hasPrev
+            ? ` Desemberkostnad fra "${scenario?.prevScenario?.name}" er inkludert som januarkostnad.`
+            : " Ingen forrige scenario er koblet — januarkostnaden for eksterne er tom."}
+        </div>
+      )}
 
       <div className="rounded border bg-white p-4 inline-block">
         <p className="text-xs text-gray-500 uppercase">Totalkostnad {team?.name}</p>

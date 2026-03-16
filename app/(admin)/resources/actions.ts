@@ -10,6 +10,9 @@ const ResourceSchema = z.object({
   employmentType: z.enum(["internal", "external"]),
   companyId: z.string().min(1, "Firma er påkrevd"),
   primaryRole: z.string().optional(),
+  department: z.string().optional(),
+  activeFrom: z.string().optional().nullable(),
+  activeTo: z.string().optional().nullable(),
   notes: z.string().optional(),
 });
 
@@ -27,6 +30,9 @@ export async function createResource(formData: FormData) {
     employmentType: formData.get("employmentType"),
     companyId: formData.get("companyId"),
     primaryRole: formData.get("primaryRole") || undefined,
+    department: formData.get("department") || undefined,
+    activeFrom: formData.get("activeFrom") || null,
+    activeTo: formData.get("activeTo") || null,
     notes: formData.get("notes") || undefined,
   });
 
@@ -34,7 +40,14 @@ export async function createResource(formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const resource = await prisma.resource.create({ data: parsed.data });
+  const { activeFrom, activeTo, ...rest } = parsed.data;
+  const resource = await prisma.resource.create({
+    data: {
+      ...rest,
+      activeFrom: activeFrom ? new Date(activeFrom) : null,
+      activeTo: activeTo ? new Date(activeTo) : null,
+    },
+  });
 
   const rateRaw = formData.get("hourlyRateNok");
   if (rateRaw) {
@@ -70,6 +83,9 @@ export async function updateResource(id: string, formData: FormData) {
     employmentType: formData.get("employmentType"),
     companyId: formData.get("companyId"),
     primaryRole: formData.get("primaryRole") || undefined,
+    department: formData.get("department") || undefined,
+    activeFrom: formData.get("activeFrom") || null,
+    activeTo: formData.get("activeTo") || null,
     notes: formData.get("notes") || undefined,
   });
 
@@ -77,7 +93,16 @@ export async function updateResource(id: string, formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  await prisma.resource.update({ where: { id }, data: parsed.data });
+  const { activeFrom, activeTo, companyId, ...rest } = parsed.data;
+  await prisma.resource.update({
+    where: { id },
+    data: {
+      ...rest,
+      company: { connect: { id: companyId } },
+      activeFrom: activeFrom ? new Date(activeFrom) : null,
+      activeTo: activeTo ? new Date(activeTo) : null,
+    },
+  });
   revalidatePath("/resources");
 }
 

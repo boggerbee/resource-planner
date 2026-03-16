@@ -19,9 +19,13 @@ export default async function NewResourcePage() {
     <NewResourceForm
       companies={companies}
       defaultInternalHourlyRate={
-        settings?.defaultInternalHourlyRate
-          ? Number(settings.defaultInternalHourlyRate)
-          : null
+        settings?.defaultInternalHourlyRate ? Number(settings.defaultInternalHourlyRate) : null
+      }
+      defaultInternalInvoiceFactor={
+        settings?.defaultInternalInvoiceFactor ? Number(settings.defaultInternalInvoiceFactor) : null
+      }
+      defaultExternalInvoiceFactor={
+        settings?.defaultExternalInvoiceFactor ? Number(settings.defaultExternalInvoiceFactor) : null
       }
       handleSubmit={handleSubmit}
     />

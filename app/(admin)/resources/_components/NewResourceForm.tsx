@@ -10,11 +10,16 @@ interface Company {
 interface Props {
   companies: Company[];
   defaultInternalHourlyRate: number | null;
+  defaultInternalInvoiceFactor: number | null;
+  defaultExternalInvoiceFactor: number | null;
   handleSubmit: (formData: FormData) => Promise<void>;
 }
 
-export function NewResourceForm({ companies, defaultInternalHourlyRate, handleSubmit }: Props) {
+export function NewResourceForm({ companies, defaultInternalHourlyRate, defaultInternalInvoiceFactor, defaultExternalInvoiceFactor, handleSubmit }: Props) {
   const [employmentType, setEmploymentType] = useState<"internal" | "external">("external");
+  const [invoiceFactor, setInvoiceFactor] = useState(
+    String(defaultExternalInvoiceFactor ?? "1")
+  );
 
   const isInternal = employmentType === "internal";
   const invoiceLabel = isInternal ? "Stillingsprosent (0–1)" : "Faktureringsgrad (0–1)";
@@ -53,7 +58,15 @@ export function NewResourceForm({ companies, defaultInternalHourlyRate, handleSu
             <select
               name="employmentType"
               value={employmentType}
-              onChange={(e) => setEmploymentType(e.target.value as "internal" | "external")}
+              onChange={(e) => {
+                const t = e.target.value as "internal" | "external";
+                setEmploymentType(t);
+                setInvoiceFactor(
+                  t === "internal"
+                    ? String(defaultInternalInvoiceFactor ?? "1")
+                    : String(defaultExternalInvoiceFactor ?? "1")
+                );
+              }}
               className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="internal">Intern (fast ansatt)</option>
@@ -77,11 +90,38 @@ export function NewResourceForm({ companies, defaultInternalHourlyRate, handleSu
             </select>
           </div>
 
-          <div className="col-span-2">
+          <div>
             <label className="block text-sm font-medium text-gray-700">Primærrolle</label>
             <input
               name="primaryRole"
               placeholder="f.eks. Fullstackutvikler"
+              className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Avdeling</label>
+            <input
+              name="department"
+              placeholder="f.eks. Teknologi"
+              className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Startdato</label>
+            <input
+              name="activeFrom"
+              type="date"
+              className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Sluttdato</label>
+            <input
+              name="activeTo"
+              type="date"
               className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -120,7 +160,8 @@ export function NewResourceForm({ companies, defaultInternalHourlyRate, handleSu
               min="0"
               max="2"
               step="0.01"
-              defaultValue="1.0"
+              value={invoiceFactor}
+              onChange={(e) => setInvoiceFactor(e.target.value)}
               className="mt-1 w-full rounded border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

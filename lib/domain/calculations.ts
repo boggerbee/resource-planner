@@ -63,7 +63,9 @@ export function computeMonthlyFTE(allocations: { allocationPct: number }[]): num
  */
 export function computeMonthlyCost(input: AllocationInput): number {
   const { allocationPct, rateCard, employmentType, workingHoursNorm } = input;
-  const invoiceFactor = rateCard.invoiceFactor ?? 1.0;
+  const invoiceFactor = employmentType === "external"
+    ? (rateCard.invoiceFactor ?? 1.0)
+    : 1.0;
 
   if (rateCard.costBasis === "monthly") {
     const rate = rateCard.monthlyRateNok ?? 0;
@@ -170,7 +172,7 @@ export function resolveRateCard(
   year: number,
   month: number
 ): RateCardPeriod | null {
-  const periodStart = new Date(year, month - 1, 1);
+  const periodStart = new Date(Date.UTC(year, month - 1, 1));
 
   const valid = rateCards.filter((rc) => {
     const from = rc.effectiveFrom;

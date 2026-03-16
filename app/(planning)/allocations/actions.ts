@@ -63,6 +63,8 @@ export async function upsertAllocations(
   }
 
   revalidatePath("/allocations");
+  revalidatePath("/reports/portfolio");
+  revalidatePath("/reports/team");
 }
 
 export async function removeResourceFromTeam(
@@ -75,4 +77,6 @@ export async function removeResourceFromTeam(
     where: { scenarioId, teamId, resourceId },
   });
   revalidatePath("/allocations");
+  revalidatePath("/reports/portfolio");
+  revalidatePath("/reports/team");
 }

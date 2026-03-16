@@ -1,274 +1,269 @@
 /**
  * Seed script for Resource Planner.
  *
- * Leser fra prisma/seed-data.ts — rediger den filen for å vaske data.
- * Kjør én gang for å populere databasen fra scratch.
+ * Leser fra prisma/seed-data.ts — rediger den filen for å endre data.
+ * Kjøres ved db:reset eller manuelt med npm run db:seed.
  *
  * Bruk:
- *   npm run db:seed           — last inn seed-data.ts
+ *   npm run db:seed           — last inn seed-data
  *   npm run db:reset          — nullstill DB og kjør seed på nytt
- *
- * For å regenerere seed-data.ts fra Excel:
- *   node scripts/extract-seed-data.mjs
  */
 
 import "dotenv/config";
-import { PrismaClient, EmploymentType, ResourceType, ScenarioStatus, CostBasis } from "@prisma/client";
+import {
+  PrismaClient,
+  EmploymentType,
+  ResourceType,
+  ScenarioStatus,
+  CostBasis,
+} from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { resources, teams, allocations } from "./seed-data";
+import {
+  companyTypes,
+  companies,
+  competencies,
+  tags,
+  teams,
+  resources,
+  scenarios,
+  allocations,
+} from "./seed-data";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-const YEAR = 2026;
-const SCENARIO_NAME = "Prognose 2026";
-const WORKING_HOURS_PER_MONTH = 162;
-
-function isPlaceholder(name: string): boolean {
-  return /^nn/i.test(name.trim());
-}
-
 async function main() {
   console.log("🌱 Starter seed fra seed-data.ts...");
 
-  // ─── 1. Firma-typer ──────────────────────────────────────────────────────
+  // ─── 1. Firmatyper ──────────────────────────────────────────────────────
 
-  const internalType = await prisma.companyType.upsert({
-    where: { name: "Intern virksomhet" },
-    create: { name: "Intern virksomhet", description: "Virksomhetens egne ansatte" },
-    update: {},
-  });
-
-  const consultingType = await prisma.companyType.upsert({
-    where: { name: "Konsulenthus" },
-    create: { name: "Konsulenthus", description: "Konsulentselskaper" },
-    update: {},
-  });
-
-  for (const name of ["Bemanningsforetak", "Produksjonsbedrift", "Leverandør"]) {
+  for (const ct of companyTypes) {
     await prisma.companyType.upsert({
-      where: { name },
-      create: { name },
-      update: {},
+      where: { id: ct.id },
+      create: { id: ct.id, name: ct.name, description: ct.description ?? undefined },
+      update: { name: ct.name, description: ct.description ?? undefined },
     });
   }
+  console.log(`  ✅ ${companyTypes.length} firmatyper`);
 
-  // ─── 2. Internt firma ────────────────────────────────────────────────────
+  // ─── 2. Firma ────────────────────────────────────────────────────────────
 
-  const internalCompany = await prisma.company.upsert({
-    where: { id: "internal-company" },
-    create: {
-      id: "internal-company",
-      name: "Intern",
-      companyTypeId: internalType.id,
-      isInternalCompany: true,
-    },
-    update: {},
-  });
+  for (const c of companies) {
+    await prisma.company.upsert({
+      where: { id: c.id },
+      create: {
+        id: c.id,
+        name: c.name,
+        companyTypeId: c.companyTypeId,
+        isInternalCompany: c.isInternalCompany,
+        active: c.active,
+      },
+      update: {
+        name: c.name,
+        companyTypeId: c.companyTypeId,
+        isInternalCompany: c.isInternalCompany,
+        active: c.active,
+      },
+    });
+  }
+  console.log(`  ✅ ${companies.length} firma`);
 
   // ─── 3. Kompetanser ──────────────────────────────────────────────────────
 
-  const competencyNames = [
-    "Produktledelse", "Systemutvikling", "Frontendutvikling", "Backendutvikling",
-    "DevOps", "Dataanalyse", "UX/design", "Prosjektledelse", "Arkitektur",
-    "Testautomatisering", "Scrum / Agile", "Sikkerhet", "Natural/Adabas",
-    "Tjenestedesign", "Forretningsutvikling", "Juridisk rådgivning",
-  ];
-
-  for (const name of competencyNames) {
+  for (const c of competencies) {
     await prisma.competency.upsert({
-      where: { name },
-      create: { name },
-      update: {},
-    });
-  }
-
-  // ─── 4. Team ─────────────────────────────────────────────────────────────
-
-  const teamMap = new Map<string, string>(); // projectCode → id
-  for (const t of teams) {
-    const team = await prisma.team.upsert({
-      where: { projectCode: t.projectCode },
-      create: { name: t.name, projectCode: t.projectCode },
-      update: { name: t.name },
-    });
-    teamMap.set(t.projectCode, team.id);
-  }
-  console.log(`  ✅ ${teams.length} team opprettet/oppdatert`);
-
-  // ─── 5. Firma (fra ressurslisten) ────────────────────────────────────────
-
-  const uniqueCompanies = [
-    ...new Set(
-      resources.map((r) => r.company).filter((c): c is string => !!c)
-    ),
-  ].sort();
-
-  const companyMap = new Map<string, string>(); // name → id
-  companyMap.set("Intern", internalCompany.id);
-
-  for (const name of uniqueCompanies) {
-    const company = await prisma.company.upsert({
-      where: { id: `co-${name.toLowerCase().replace(/\s+/g, "-").slice(0, 40)}` },
+      where: { id: c.id },
       create: {
-        id: `co-${name.toLowerCase().replace(/\s+/g, "-").slice(0, 40)}`,
-        name,
-        companyTypeId: consultingType.id,
-        isInternalCompany: false,
+        id: c.id,
+        name: c.name,
+        category: c.category ?? undefined,
+        description: c.description ?? undefined,
       },
-      update: { name },
+      update: { name: c.name },
     });
-    companyMap.set(name, company.id);
   }
-  console.log(`  ✅ ${uniqueCompanies.length} firma opprettet/oppdatert`);
+  console.log(`  ✅ ${competencies.length} kompetanser`);
+
+  // ─── 4. Tags ─────────────────────────────────────────────────────────────
+
+  for (const t of tags) {
+    await prisma.tag.upsert({
+      where: { id: t.id },
+      create: { id: t.id, name: t.name, color: t.color ?? undefined },
+      update: { name: t.name, color: t.color ?? undefined },
+    });
+  }
+  console.log(`  ✅ ${tags.length} tags`);
+
+  // ─── 5. Team (uten teamLead/attestant/godkjenner — settes etter ressurser) ──
+
+  for (const t of teams) {
+    await prisma.team.upsert({
+      where: { id: t.id },
+      create: {
+        id: t.id,
+        name: t.name,
+        description: t.description ?? undefined,
+        projectCode: t.projectCode,
+        konto: t.konto ?? undefined,
+        koststed: t.koststed ?? undefined,
+        active: t.active,
+      },
+      update: {
+        name: t.name,
+        description: t.description ?? undefined,
+        konto: t.konto ?? undefined,
+        koststed: t.koststed ?? undefined,
+        active: t.active,
+      },
+    });
+
+    // Synkroniser tags
+    await prisma.teamTag.deleteMany({ where: { teamId: t.id } });
+    for (const tagId of t.tagIds) {
+      await prisma.teamTag.create({ data: { teamId: t.id, tagId } });
+    }
+  }
+  console.log(`  ✅ ${teams.length} team`);
 
   // ─── 6. Ressurser og ratekort ────────────────────────────────────────────
 
-  const resourceMap = new Map<string, string>(); // name → id (merk: duplikatnavn kan overskrives)
-
   for (const r of resources) {
-    const companyId = r.isInternal
-      ? internalCompany.id
-      : r.company
-      ? (companyMap.get(r.company) ?? internalCompany.id)
-      : internalCompany.id;
-
-    const employmentType = r.isInternal ? EmploymentType.internal : EmploymentType.external;
-    const resourceType = isPlaceholder(r.name) ? ResourceType.placeholder : ResourceType.person;
-
-    // Bruk navn+firma som unik nøkkel for å finne/opprette
-    const existing = await prisma.resource.findFirst({
-      where: { name: r.name, companyId },
+    await prisma.resource.upsert({
+      where: { id: r.id },
+      create: {
+        id: r.id,
+        type: r.type as ResourceType,
+        name: r.name,
+        employmentType: r.employmentType as EmploymentType,
+        companyId: r.companyId,
+        primaryRole: r.primaryRole ?? undefined,
+      },
+      update: {
+        name: r.name,
+        employmentType: r.employmentType as EmploymentType,
+        companyId: r.companyId,
+        primaryRole: r.primaryRole ?? undefined,
+      },
     });
 
-    let resourceId: string;
-    if (existing) {
-      await prisma.resource.update({
-        where: { id: existing.id },
-        data: { primaryRole: r.role ?? existing.primaryRole },
+    for (const rc of r.rateCards) {
+      const effectiveFrom = new Date(rc.effectiveFrom);
+      const existing = await prisma.rateCard.findFirst({
+        where: { resourceId: r.id, effectiveFrom },
       });
-      resourceId = existing.id;
-    } else {
-      const created = await prisma.resource.create({
-        data: {
-          name: r.name,
-          type: resourceType,
-          employmentType,
-          companyId,
-          primaryRole: r.role ?? null,
-        },
-      });
-      resourceId = created.id;
-    }
-
-    resourceMap.set(r.name, resourceId);
-
-    // Ratekort — opprett bare hvis det ikke finnes fra 2026-01-01
-    if (r.hourlyRateNok !== null) {
-      const existingRate = await prisma.rateCard.findFirst({
-        where: {
-          resourceId,
-          effectiveFrom: new Date(YEAR, 0, 1),
-        },
-      });
-      if (!existingRate) {
+      const data = {
+        effectiveTo: rc.effectiveTo ? new Date(rc.effectiveTo) : null,
+        costBasis: rc.costBasis as CostBasis,
+        hourlyRateNok: rc.hourlyRateNok,
+        monthlyRateNok: rc.monthlyRateNok,
+        vatPct: rc.vatPct,
+        invoiceFactor: rc.invoiceFactor,
+        source: rc.source,
+      };
+      if (existing) {
+        await prisma.rateCard.update({ where: { id: existing.id }, data });
+      } else {
         await prisma.rateCard.create({
-          data: {
-            resourceId,
-            effectiveFrom: new Date(YEAR, 0, 1),
-            costBasis: CostBasis.hourly,
-            hourlyRateNok: r.hourlyRateNok,
-            invoiceFactor: 1.0,
-            source: "seed-data.ts",
-          },
+          data: { resourceId: r.id, effectiveFrom, ...data },
         });
       }
     }
   }
-  console.log(`  ✅ ${resources.length} ressurser opprettet/oppdatert`);
+  console.log(`  ✅ ${resources.length} ressurser`);
 
-  // ─── 7. Scenario og perioder ─────────────────────────────────────────────
+  // ─── 7. Koble teamLead/attestant/godkjenner ──────────────────────────────
 
-  const scenario = await prisma.scenario.upsert({
-    where: { name_year: { name: SCENARIO_NAME, year: YEAR } },
-    create: {
-      name: SCENARIO_NAME,
-      year: YEAR,
-      status: ScenarioStatus.draft,
-      description: "Importert fra Excel-prognose",
-    },
-    update: {},
-  });
-
-  const periodMap = new Map<number, string>(); // month → id
-  for (let month = 1; month <= 12; month++) {
-    const period = await prisma.planningPeriod.upsert({
-      where: {
-        scenarioId_year_month: { scenarioId: scenario.id, year: YEAR, month },
-      },
-      create: {
-        scenarioId: scenario.id,
-        year: YEAR,
-        month,
-        workingHoursNorm: WORKING_HOURS_PER_MONTH,
-      },
-      update: {},
-    });
-    periodMap.set(month, period.id);
+  for (const t of teams) {
+    if (t.teamLeadId || t.attestantId || t.godkjennerId) {
+      await prisma.team.update({
+        where: { id: t.id },
+        data: {
+          teamLeadId: t.teamLeadId ?? null,
+          attestantId: t.attestantId ?? null,
+          godkjennerId: t.godkjennerId ?? null,
+        },
+      });
+    }
   }
 
-  // ─── 8. Allokeringer ─────────────────────────────────────────────────────
+  // ─── 8. Scenarioer og planperioder ──────────────────────────────────────
+
+  // Første pass: opprett uten prevScenarioId for å unngå FK-syklus
+  for (const s of scenarios) {
+    await prisma.scenario.upsert({
+      where: { id: s.id },
+      create: {
+        id: s.id,
+        name: s.name,
+        year: s.year,
+        status: s.status as ScenarioStatus,
+        description: s.description ?? undefined,
+        externalCostOffsetMonths: s.externalCostOffsetMonths,
+        prevScenarioId: null,
+      },
+      update: {
+        name: s.name,
+        year: s.year,
+        status: s.status as ScenarioStatus,
+        description: s.description ?? undefined,
+        externalCostOffsetMonths: s.externalCostOffsetMonths,
+      },
+    });
+
+    for (const pp of s.planningPeriods) {
+      await prisma.planningPeriod.upsert({
+        where: { id: pp.id },
+        create: {
+          id: pp.id,
+          scenarioId: s.id,
+          year: pp.year,
+          month: pp.month,
+          workingHoursNorm: pp.workingHoursNorm,
+        },
+        update: { workingHoursNorm: pp.workingHoursNorm },
+      });
+    }
+  }
+
+  // Andre pass: sett prevScenarioId
+  for (const s of scenarios) {
+    if (s.prevScenarioId) {
+      await prisma.scenario.update({
+        where: { id: s.id },
+        data: { prevScenarioId: s.prevScenarioId },
+      });
+    }
+  }
+  console.log(`  ✅ ${scenarios.length} scenarioer`);
+
+  // ─── 9. Allokeringer ─────────────────────────────────────────────────────
 
   let allocCount = 0;
-  let warnCount = 0;
-
   for (const a of allocations) {
-    const teamId = teamMap.get(a.projectCode);
-    if (!teamId) {
-      console.warn(`  ⚠️  Ukjent prosjektkode: ${a.projectCode} (for ressurs ${a.resource})`);
-      warnCount++;
-      continue;
-    }
-
-    const resourceId = resourceMap.get(a.resource);
-    if (!resourceId) {
-      console.warn(`  ⚠️  Ressurs ikke funnet: "${a.resource}"`);
-      warnCount++;
-      continue;
-    }
-
-    for (let m = 0; m < 12; m++) {
-      const pct = a.months[m];
-      if (!pct || pct <= 0) continue;
-
-      const month = m + 1;
-      const planningPeriodId = periodMap.get(month)!;
-
-      await prisma.allocation.upsert({
-        where: {
-          scenarioId_teamId_resourceId_planningPeriodId: {
-            scenarioId: scenario.id,
-            teamId,
-            resourceId,
-            planningPeriodId,
-          },
+    await prisma.allocation.upsert({
+      where: {
+        scenarioId_teamId_resourceId_planningPeriodId: {
+          scenarioId: a.scenarioId,
+          teamId: a.teamId,
+          resourceId: a.resourceId,
+          planningPeriodId: a.planningPeriodId,
         },
-        create: {
-          scenarioId: scenario.id,
-          teamId,
-          resourceId,
-          planningPeriodId,
-          allocationPct: pct,
-        },
-        update: { allocationPct: pct },
-      });
-      allocCount++;
-    }
+      },
+      create: {
+        scenarioId: a.scenarioId,
+        teamId: a.teamId,
+        resourceId: a.resourceId,
+        planningPeriodId: a.planningPeriodId,
+        allocationPct: a.allocationPct,
+      },
+      update: { allocationPct: a.allocationPct },
+    });
+    allocCount++;
   }
+  console.log(`  ✅ ${allocCount} allokeringer`);
 
-  console.log(`  ✅ ${allocCount} allokeringer opprettet/oppdatert`);
-  if (warnCount > 0) console.warn(`  ⚠️  ${warnCount} advarsler — sjekk ressurs- og teamsnavn i seed-data.ts`);
-  console.log(`\n✅ Seed ferdig!`);
+  console.log("\n✅ Seed ferdig!");
 }
 
 main()
