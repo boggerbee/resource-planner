@@ -14,7 +14,10 @@ export function ScenarioSelect({
   return (
     <select
       value={value}
-      onChange={(e) => router.push(`?scenarioId=${e.target.value}`)}
+      onChange={(e) => {
+          document.cookie = `lastTeamsScenarioId=${e.target.value}; path=/; max-age=31536000`;
+          router.push(`?scenarioId=${e.target.value}`);
+        }}
       className="rounded border px-2 py-1 text-sm"
     >
       {scenarios.map((s) => (

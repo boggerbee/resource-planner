@@ -302,7 +302,7 @@ function AddResourcePanel({
                   >
                     <span className="font-medium">{r.name}</span>
                     <span className="text-xs text-gray-500">
-                      {r.company.name} · {r.employmentType === "internal" ? "Intern" : "Ekstern"}
+                      {r.company.name} · {r.employmentType === "external" ? "Ekstern" : "Intern"}
                     </span>
                   </button>
                 </li>
@@ -420,7 +420,7 @@ export function AllocationGrid({
                   </td>
                   <td className="px-4 py-3 text-gray-600">{resource.company.name}</td>
                   <td className="px-4 py-3 text-gray-600">
-                    {resource.employmentType === "internal" ? "Intern" : "Ekstern"}
+                    {resource.employmentType === "external" ? "Ekstern" : "Intern"}
                   </td>
                   {months.map((m) => {
                     const pct = monthData[m] ?? 0;

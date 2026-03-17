@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { AllocationFilters } from "./allocation-filters";
 import { AllocationGrid } from "./allocation-grid";
@@ -8,6 +9,7 @@ export default async function AllocationsPage({
   searchParams: Promise<{ scenarioId?: string; teamId?: string; onlyEditable?: string }>;
 }) {
   const params = await searchParams;
+  const cookieStore = await cookies();
 
   const [scenarios, teams] = await Promise.all([
     prisma.scenario.findMany({
@@ -20,7 +22,8 @@ export default async function AllocationsPage({
   const onlyEditable = params.onlyEditable === "1";
   const editableScenarios = onlyEditable ? scenarios.filter((s) => s.status === "draft") : scenarios;
   const scenarioId = params.scenarioId ?? editableScenarios[0]?.id ?? scenarios[0]?.id;
-  const teamId = params.teamId ?? teams[0]?.id;
+  const cookieTeamId = cookieStore.get("lastAllocationTeam")?.value;
+  const teamId = params.teamId ?? (teams.some((t) => t.id === cookieTeamId) ? cookieTeamId : undefined) ?? teams[0]?.id;
   const selectedScenario = scenarios.find((s) => s.id === scenarioId);
   const readOnly = selectedScenario?.status === "approved" || selectedScenario?.status === "archived";
 

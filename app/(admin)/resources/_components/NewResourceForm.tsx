@@ -16,12 +16,12 @@ interface Props {
 }
 
 export function NewResourceForm({ companies, defaultInternalHourlyRate, defaultInternalInvoiceFactor, defaultExternalInvoiceFactor, handleSubmit }: Props) {
-  const [employmentType, setEmploymentType] = useState<"internal" | "external">("external");
+  const [employmentType, setEmploymentType] = useState<"internal" | "internal_temporary" | "external">("external");
   const [invoiceFactor, setInvoiceFactor] = useState(
     String(defaultExternalInvoiceFactor ?? "1")
   );
 
-  const isInternal = employmentType === "internal";
+  const isInternal = employmentType !== "external";
   const invoiceLabel = isInternal ? "Stillingsprosent (0–1)" : "Faktureringsgrad (0–1)";
   const defaultHourly = isInternal && defaultInternalHourlyRate
     ? String(defaultInternalHourlyRate)
@@ -37,6 +37,7 @@ export function NewResourceForm({ companies, defaultInternalHourlyRate, defaultI
             <input
               name="name"
               required
+              autoFocus
               className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -59,10 +60,10 @@ export function NewResourceForm({ companies, defaultInternalHourlyRate, defaultI
               name="employmentType"
               value={employmentType}
               onChange={(e) => {
-                const t = e.target.value as "internal" | "external";
+                const t = e.target.value as "internal" | "internal_temporary" | "external";
                 setEmploymentType(t);
                 setInvoiceFactor(
-                  t === "internal"
+                  t !== "external"
                     ? String(defaultInternalInvoiceFactor ?? "1")
                     : String(defaultExternalInvoiceFactor ?? "1")
                 );
@@ -70,6 +71,7 @@ export function NewResourceForm({ companies, defaultInternalHourlyRate, defaultI
               className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="internal">Intern (fast ansatt)</option>
+              <option value="internal_temporary">Intern (midlertidig)</option>
               <option value="external">Ekstern (konsulent)</option>
             </select>
           </div>

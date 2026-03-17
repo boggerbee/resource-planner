@@ -7,7 +7,7 @@ import { z } from "zod";
 const ResourceSchema = z.object({
   name: z.string().min(1, "Navn er påkrevd"),
   type: z.enum(["person", "placeholder"]),
-  employmentType: z.enum(["internal", "external"]),
+  employmentType: z.enum(["internal", "internal_temporary", "external"]),
   companyId: z.string().min(1, "Firma er påkrevd"),
   primaryRole: z.string().optional(),
   department: z.string().optional(),

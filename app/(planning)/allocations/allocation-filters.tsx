@@ -35,6 +35,10 @@ export function AllocationFilters({
     document.cookie = `lastAllocationScenario=${effectiveScenarioId}; path=/; max-age=31536000`;
   }, [effectiveScenarioId]);
 
+  useEffect(() => {
+    document.cookie = `lastAllocationTeam=${teamId}; path=/; max-age=31536000`;
+  }, [teamId]);
+
   return (
     <form ref={formRef} className="flex flex-wrap items-end gap-4 rounded border bg-white p-4">
       <div>

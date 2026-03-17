@@ -8,10 +8,8 @@ const MONTH_LABELS = [
 
 function formatNok(amount: number) {
   return new Intl.NumberFormat("nb-NO", {
-    style: "currency",
-    currency: "NOK",
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(Math.round(amount / 1000));
 }
 
 type RateCardInput = {
@@ -99,12 +97,12 @@ export default async function TeamReportPage({
   const hasPrev = !!scenario?.prevScenario;
 
   // Build month × resource cost+fte table
-  type ResourceMonth = { name: string; employmentType: string; months: Record<number, { cost: number; fte: number; missingRate: boolean }> };
+  type ResourceMonth = { id: string; name: string; employmentType: string; months: Record<number, { cost: number; fte: number; missingRate: boolean }> };
   const resourceMap = new Map<string, ResourceMonth>();
 
   function ensureResource(id: string, name: string, employmentType: string) {
     if (!resourceMap.has(id)) {
-      resourceMap.set(id, { name, employmentType, months: {} });
+      resourceMap.set(id, { id, name, employmentType, months: {} });
     }
   }
 
@@ -114,7 +112,7 @@ export default async function TeamReportPage({
     const year = alloc.planningPeriod.year;
     const pct = Number(alloc.allocationPct);
     const hoursNorm = Number(alloc.planningPeriod.workingHoursNorm);
-    const isExternal = alloc.resource.employmentType !== "internal";
+    const isExternal = alloc.resource.employmentType === "external";
 
     // With offset > 0, exclude external deliveries in the last `offset` months (same as portfolio report)
     if (isExternal && offset > 0 && deliveryMonth > 12 - offset) continue;
@@ -125,7 +123,7 @@ export default async function TeamReportPage({
       ? computeMonthlyCost({
           allocationPct: pct,
           rateCard,
-          employmentType: alloc.resource.employmentType as "internal" | "external",
+          employmentType: alloc.resource.employmentType as "internal" | "internal_temporary" | "external",
           workingHoursNorm: hoursNorm,
         })
       : 0;
@@ -142,7 +140,7 @@ export default async function TeamReportPage({
   if (offset > 0 && scenario?.prevScenario) {
     for (const prevAlloc of scenario.prevScenario.allocations) {
       if (prevAlloc.planningPeriod.month !== 12) continue;
-      if (prevAlloc.resource.employmentType === "internal") continue;
+      if (prevAlloc.resource.employmentType !== "external") continue;
 
       const pct = Number(prevAlloc.allocationPct);
       const hoursNorm = Number(prevAlloc.planningPeriod.workingHoursNorm);
@@ -219,16 +217,16 @@ export default async function TeamReportPage({
         <p className="text-2xl font-bold mt-1">{formatNok(annualCost)}</p>
       </div>
 
-      <div className="overflow-x-auto rounded border bg-white">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-gray-50 text-xs uppercase text-gray-500">
+      <div className="rounded border bg-white">
+        <table className="w-full text-xs">
+          <thead className="border-b bg-gray-50 uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3 text-left">Ressurs</th>
-              <th className="px-4 py-3 text-left">Type</th>
+              <th className="px-3 py-2 text-left">Ressurs</th>
+              <th className="px-2 py-2 text-left">Type</th>
               {MONTH_LABELS.map((label) => (
-                <th key={label} className="px-2 py-3 text-right w-20">{label}</th>
+                <th key={label} className="px-1 py-2 text-right">{label}</th>
               ))}
-              <th className="px-4 py-3 text-right">Årssum</th>
+              <th className="px-3 py-2 text-right">Årssum</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -236,22 +234,24 @@ export default async function TeamReportPage({
               const annual = Object.values(row.months).reduce((s, m) => s + m.cost, 0);
               return (
                 <tr key={row.name} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{row.name}</td>
-                  <td className="px-4 py-3 text-gray-600">
+                  <td className="px-3 py-2 font-medium whitespace-nowrap">
+                    <a href={`/resources/${row.id}`} className="hover:underline text-blue-700">{row.name}</a>
+                  </td>
+                  <td className="px-2 py-2 text-gray-600 whitespace-nowrap">
                     {row.employmentType === "internal" ? "Intern" : "Ekstern"}
                   </td>
                   {MONTH_LABELS.map((_, idx) => {
                     const m = idx + 1;
                     const entry = row.months[m];
                     return (
-                      <td key={m} className="px-2 py-3 text-right tabular-nums text-xs">
+                      <td key={m} className="px-1 py-2 text-right tabular-nums">
                         {entry ? (
                           entry.missingRate ? (
                             <span
-                              className="inline-flex items-center gap-1 text-orange-600"
+                              className="text-orange-600"
                               title={`${Math.round(entry.fte * 100)}% FTE — mangler ratekort, kostnad satt til kr 0`}
                             >
-                              ⚠ kr 0
+                              ⚠ 0
                             </span>
                           ) : (
                             <span title={`${Math.round(entry.fte * 100)}% FTE`}>
@@ -264,7 +264,7 @@ export default async function TeamReportPage({
                       </td>
                     );
                   })}
-                  <td className="px-4 py-3 text-right font-medium tabular-nums">
+                  <td className="px-3 py-2 text-right font-medium tabular-nums whitespace-nowrap">
                     {formatNok(annual)}
                   </td>
                 </tr>
@@ -273,16 +273,16 @@ export default async function TeamReportPage({
           </tbody>
           <tfoot className="border-t-2 bg-gray-50 font-bold">
             <tr>
-              <td className="px-4 py-3" colSpan={2}>Totalt</td>
+              <td className="px-3 py-2" colSpan={2}>Totalt</td>
               {MONTH_LABELS.map((_, idx) => {
                 const m = idx + 1;
                 return (
-                  <td key={m} className="px-2 py-3 text-right tabular-nums text-xs">
+                  <td key={m} className="px-1 py-2 text-right tabular-nums">
                     {formatNok(monthTotals[m].cost)}
                   </td>
                 );
               })}
-              <td className="px-4 py-3 text-right tabular-nums">{formatNok(annualCost)}</td>
+              <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{formatNok(annualCost)}</td>
             </tr>
           </tfoot>
         </table>

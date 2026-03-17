@@ -20,7 +20,7 @@
 # production
 /build
 /docs/input/*
-/prisma/seed-data-FULL.ts
+/prisma/seed-data*
 
 # misc
 .DS_Store

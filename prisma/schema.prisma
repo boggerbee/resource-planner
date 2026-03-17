@@ -15,6 +15,7 @@ enum ResourceType {
 
 enum EmploymentType {
   internal
+  internal_temporary
   external
 }
 

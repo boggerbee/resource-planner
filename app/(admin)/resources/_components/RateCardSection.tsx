@@ -14,7 +14,7 @@ interface RateCard {
 interface Props {
   resourceId: string;
   rateCards: RateCard[];
-  employmentType: "internal" | "external";
+  employmentType: "internal" | "internal_temporary" | "external";
   defaultInternalHourlyRate?: number | null;
 }
 
@@ -77,7 +77,7 @@ export function RateCardSection({
   employmentType,
   defaultInternalHourlyRate,
 }: Props) {
-  const isInternal = employmentType === "internal";
+  const isInternal = employmentType !== "external";
   const currentYear = new Date().getFullYear();
   const uncoveredMonths = getUncoveredMonths(rateCards, currentYear);
   const invoiceLabel = isInternal ? "Stillingsprosent (0–1)" : "Faktureringsgrad (0–1)";

@@ -35,7 +35,7 @@ function computeCostForAllocation(alloc: {
   const { month, year, workingHoursNorm } = alloc.planningPeriod;
   const pct = Number(alloc.allocationPct);
   const hoursNorm = Number(workingHoursNorm);
-  const isInternal = alloc.resource.employmentType === "internal";
+  const isInternal = alloc.resource.employmentType !== "external";
 
   const rateCards = alloc.resource.rateCards.map((rc) => ({
     ...rc,
@@ -57,7 +57,7 @@ function computeCostForAllocation(alloc: {
           vatPct: rateCard.vatPct,
           invoiceFactor: rateCard.invoiceFactor,
         },
-        employmentType: alloc.resource.employmentType as "internal" | "external",
+        employmentType: alloc.resource.employmentType as "internal" | "internal_temporary" | "external",
         workingHoursNorm: hoursNorm,
       })
     : 0;
@@ -154,7 +154,7 @@ export default async function PortfolioReportPage({
   // Carry-over: December allocations from prevScenario → count as January cost
   if (offset > 0 && hasPrev && scenario?.prevScenario) {
     for (const alloc of scenario.prevScenario.allocations) {
-      const isInternal = alloc.resource.employmentType === "internal";
+      const isInternal = alloc.resource.employmentType !== "external";
       if (isInternal) continue; // Only external costs are offset
       if (alloc.planningPeriod.month !== 12) continue; // Only December carry-over
 

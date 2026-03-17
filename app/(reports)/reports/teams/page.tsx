@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ScenarioSelect } from "./scenario-select";
 
@@ -12,7 +13,11 @@ export default async function TeamsReportPage({
     orderBy: [{ year: "desc" }, { name: "asc" }],
   });
 
-  const scenarioId = params.scenarioId ?? scenarios[0]?.id;
+  const cookieStore = await cookies();
+  const scenarioId =
+    params.scenarioId ??
+    cookieStore.get("lastTeamsScenarioId")?.value ??
+    scenarios[0]?.id;
 
   if (!scenarioId) {
     return (
@@ -37,29 +42,27 @@ export default async function TeamsReportPage({
     },
   });
 
-  // Compute avg FTE per resource per team
+  // Compute average monthly FTE per team over the full scenario period
+  const totalMonths = new Set(allocations.map((a) => a.planningPeriod.month)).size || 1;
+
   type TeamStats = { internFTE: number; eksternFTE: number };
   const teamStats: Record<string, TeamStats> = {};
 
   for (const team of teams) {
-    teamStats[team.id] = { internFTE: 0, eksternFTE: 0 };
-
     const teamAllocs = allocations.filter((a) => a.teamId === team.id);
-    const resourceIds = [...new Set(teamAllocs.map((a) => a.resourceId))];
 
-    for (const resourceId of resourceIds) {
-      const resAllocs = teamAllocs.filter((a) => a.resourceId === resourceId);
-      const months = [...new Set(resAllocs.map((a) => a.planningPeriod.month))];
-      const totalPct = resAllocs.reduce((s, a) => s + Number(a.allocationPct), 0);
-      const avgFTE = months.length > 0 ? totalPct / months.length : 0;
+    const internPct = teamAllocs
+      .filter((a) => a.resource.employmentType !== "external")
+      .reduce((s, a) => s + Number(a.allocationPct), 0);
 
-      const isInternal = resAllocs[0]?.resource.employmentType === "internal";
-      if (isInternal) {
-        teamStats[team.id].internFTE += avgFTE;
-      } else {
-        teamStats[team.id].eksternFTE += avgFTE;
-      }
-    }
+    const eksternPct = teamAllocs
+      .filter((a) => a.resource.employmentType === "external")
+      .reduce((s, a) => s + Number(a.allocationPct), 0);
+
+    teamStats[team.id] = {
+      internFTE: internPct / totalMonths,
+      eksternFTE: eksternPct / totalMonths,
+    };
   }
 
   const maxFTE = Math.max(

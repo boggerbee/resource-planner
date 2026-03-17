@@ -21,7 +21,7 @@ interface Resource {
   id: string;
   name: string;
   type: string;
-  employmentType: "internal" | "external";
+  employmentType: "internal" | "internal_temporary" | "external";
   companyId: string;
   primaryRole: string | null;
   department: string | null;
@@ -48,7 +48,7 @@ export function ResourceEditClient({
   handleUpdate,
   handleDelete,
 }: Props) {
-  const [employmentType, setEmploymentType] = useState<"internal" | "external">(
+  const [employmentType, setEmploymentType] = useState<"internal" | "internal_temporary" | "external">(
     resource.employmentType
   );
 
@@ -88,10 +88,11 @@ export function ResourceEditClient({
             <select
               name="employmentType"
               value={employmentType}
-              onChange={(e) => setEmploymentType(e.target.value as "internal" | "external")}
+              onChange={(e) => setEmploymentType(e.target.value as "internal" | "internal_temporary" | "external")}
               className="mt-1 w-full rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="internal">Intern (fast ansatt)</option>
+              <option value="internal_temporary">Intern (midlertidig)</option>
               <option value="external">Ekstern (konsulent)</option>
             </select>
           </div>
