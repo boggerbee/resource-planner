@@ -2,6 +2,7 @@ import React from "react";
 import { prisma } from "@/lib/prisma";
 import {
   computeMonthlyCost,
+  computeMonthlyVat,
   resolveRateCard,
 } from "@/lib/domain/calculations";
 import { ScenarioSelect } from "./ScenarioSelect";
@@ -45,7 +46,7 @@ function computeCostForAllocation(alloc: {
   }));
 
   const rateCard = resolveRateCard(rateCards, year, month);
-  const cost = rateCard
+  const baseCost = rateCard
     ? computeMonthlyCost({
         allocationPct: pct,
         rateCard: {
@@ -59,6 +60,7 @@ function computeCostForAllocation(alloc: {
         workingHoursNorm: hoursNorm,
       })
     : 0;
+  const cost = baseCost + (!isInternal ? computeMonthlyVat(baseCost, rateCard?.vatPct) : 0);
 
   return { cost, isInternal };
 }

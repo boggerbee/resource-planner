@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { computeMonthlyCost, resolveRateCard } from "@/lib/domain/calculations";
+import { computeMonthlyCost, computeMonthlyVat, resolveRateCard } from "@/lib/domain/calculations";
 import { TeamReportFilters } from "./TeamReportFilters";
 
 const MONTH_LABELS = [
@@ -122,7 +122,7 @@ export default async function TeamReportPage({
 
     const rateCards = mapRateCards(alloc.resource.rateCards);
     const rateCard = resolveRateCard(rateCards, year, deliveryMonth);
-    const cost = rateCard
+    const baseCost = rateCard
       ? computeMonthlyCost({
           allocationPct: pct,
           rateCard,
@@ -130,6 +130,7 @@ export default async function TeamReportPage({
           workingHoursNorm: hoursNorm,
         })
       : 0;
+    const cost = baseCost + (isExternal ? computeMonthlyVat(baseCost, rateCard?.vatPct) : 0);
 
     ensureResource(alloc.resourceId, alloc.resource.name, alloc.resource.employmentType, alloc.resource.type);
     const existing = resourceMap.get(alloc.resourceId)!.months[displayMonth];
@@ -162,7 +163,7 @@ export default async function TeamReportPage({
 
       const rateCards = mapRateCards(prevAlloc.resource.rateCards);
       const rateCard = resolveRateCard(rateCards, prevYear, deliveryMonth);
-      const cost = rateCard
+      const baseCost = rateCard
         ? computeMonthlyCost({
             allocationPct: pct,
             rateCard,
@@ -170,6 +171,7 @@ export default async function TeamReportPage({
             workingHoursNorm: hoursNorm,
           })
         : 0;
+      const cost = baseCost + computeMonthlyVat(baseCost, rateCard?.vatPct);
 
       ensureResource(prevAlloc.resourceId, prevAlloc.resource.name, prevAlloc.resource.employmentType, prevAlloc.resource.type);
       const existing = resourceMap.get(prevAlloc.resourceId)!.months[displayMonth];
@@ -196,6 +198,8 @@ export default async function TeamReportPage({
   }
 
   const annualCost = Object.values(monthTotals).reduce((s, m) => s + m.cost, 0);
+  const annualInternal = rows.filter(r => r.employmentType !== "external").reduce((s, r) => s + Object.values(r.months).reduce((ms, m) => ms + m.cost, 0), 0);
+  const annualExternal = rows.filter(r => r.employmentType === "external").reduce((s, r) => s + Object.values(r.months).reduce((ms, m) => ms + m.cost, 0), 0);
 
   return (
     <div className="space-y-6">
@@ -218,9 +222,19 @@ export default async function TeamReportPage({
         </div>
       )}
 
-      <div className="rounded border bg-white p-4 inline-block">
-        <p className="text-xs text-gray-500 uppercase">Totalkostnad {team?.name}</p>
-        <p className="text-2xl font-bold mt-1">{formatNok(annualCost)}</p>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded border bg-white p-4">
+          <p className="text-xs text-gray-500 uppercase">Intern kostnad</p>
+          <p className="text-2xl font-bold mt-1">{formatNok(annualInternal)}</p>
+        </div>
+        <div className="rounded border bg-white p-4">
+          <p className="text-xs text-gray-500 uppercase">Ekstern kostnad</p>
+          <p className="text-2xl font-bold mt-1">{formatNok(annualExternal)}</p>
+        </div>
+        <div className="rounded border bg-white p-4">
+          <p className="text-xs text-gray-500 uppercase">Totalkostnad {team?.name}</p>
+          <p className="text-2xl font-bold mt-1">{formatNok(annualCost)}</p>
+        </div>
       </div>
 
       <div className="rounded border bg-white">
