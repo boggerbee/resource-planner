@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { computeMonthlyCost, resolveRateCard } from "@/lib/domain/calculations";
+import { TeamReportFilters } from "./TeamReportFilters";
 
 const MONTH_LABELS = [
   "Jan", "Feb", "Mar", "Apr", "Mai", "Jun",
@@ -47,13 +49,14 @@ export default async function TeamReportPage({
   searchParams: Promise<{ scenarioId?: string; teamId?: string }>;
 }) {
   const params = await searchParams;
+  const cookieStore = await cookies();
   const [scenarios, teams] = await Promise.all([
     prisma.scenario.findMany({ orderBy: [{ year: "desc" }, { name: "asc" }] }),
     prisma.team.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
   ]);
 
-  const scenarioId = params.scenarioId ?? scenarios[0]?.id;
-  const teamId = params.teamId ?? teams[0]?.id;
+  const scenarioId = params.scenarioId ?? cookieStore.get("scenarioId")?.value ?? scenarios[0]?.id;
+  const teamId = params.teamId ?? cookieStore.get("teamId")?.value ?? teams[0]?.id;
 
   if (!scenarioId || !teamId) {
     return (
@@ -97,12 +100,12 @@ export default async function TeamReportPage({
   const hasPrev = !!scenario?.prevScenario;
 
   // Build month × resource cost+fte table
-  type ResourceMonth = { id: string; name: string; employmentType: string; months: Record<number, { cost: number; fte: number; missingRate: boolean }> };
+  type ResourceMonth = { id: string; name: string; employmentType: string; resourceType: string; months: Record<number, { cost: number; fte: number; missingRate: boolean }> };
   const resourceMap = new Map<string, ResourceMonth>();
 
-  function ensureResource(id: string, name: string, employmentType: string) {
+  function ensureResource(id: string, name: string, employmentType: string, resourceType: string) {
     if (!resourceMap.has(id)) {
-      resourceMap.set(id, { id, name, employmentType, months: {} });
+      resourceMap.set(id, { id, name, employmentType, resourceType, months: {} });
     }
   }
 
@@ -114,8 +117,8 @@ export default async function TeamReportPage({
     const hoursNorm = Number(alloc.planningPeriod.workingHoursNorm);
     const isExternal = alloc.resource.employmentType === "external";
 
-    // With offset > 0, exclude external deliveries in the last `offset` months (same as portfolio report)
-    if (isExternal && offset > 0 && deliveryMonth > 12 - offset) continue;
+    const displayMonth = isExternal && offset > 0 ? deliveryMonth + offset : deliveryMonth;
+    if (displayMonth > 12) continue; // falls into next year → exclude
 
     const rateCards = mapRateCards(alloc.resource.rateCards);
     const rateCard = resolveRateCard(rateCards, year, deliveryMonth);
@@ -128,26 +131,37 @@ export default async function TeamReportPage({
         })
       : 0;
 
-    ensureResource(alloc.resourceId, alloc.resource.name, alloc.resource.employmentType);
-    resourceMap.get(alloc.resourceId)!.months[deliveryMonth] = {
-      cost,
-      fte: pct,
-      missingRate: !rateCard,
-    };
+    ensureResource(alloc.resourceId, alloc.resource.name, alloc.resource.employmentType, alloc.resource.type);
+    const existing = resourceMap.get(alloc.resourceId)!.months[displayMonth];
+    if (existing) {
+      existing.cost += cost;
+      existing.fte += pct;
+      if (!rateCard) existing.missingRate = true;
+    } else {
+      resourceMap.get(alloc.resourceId)!.months[displayMonth] = {
+        cost,
+        fte: pct,
+        missingRate: !rateCard,
+      };
+    }
   }
 
-  // Carry-over: December allocations from prevScenario → January of this year
+  // Carry-over: allocations from prevScenario that shift into this year via offset
   if (offset > 0 && scenario?.prevScenario) {
     for (const prevAlloc of scenario.prevScenario.allocations) {
-      if (prevAlloc.planningPeriod.month !== 12) continue;
       if (prevAlloc.resource.employmentType !== "external") continue;
+
+      const deliveryMonth = prevAlloc.planningPeriod.month;
+      const bookingMonth = deliveryMonth + offset;
+      if (bookingMonth <= 12) continue; // doesn't spill into this year
+      const displayMonth = bookingMonth - 12;
 
       const pct = Number(prevAlloc.allocationPct);
       const hoursNorm = Number(prevAlloc.planningPeriod.workingHoursNorm);
       const prevYear = prevAlloc.planningPeriod.year;
 
       const rateCards = mapRateCards(prevAlloc.resource.rateCards);
-      const rateCard = resolveRateCard(rateCards, prevYear, 12);
+      const rateCard = resolveRateCard(rateCards, prevYear, deliveryMonth);
       const cost = rateCard
         ? computeMonthlyCost({
             allocationPct: pct,
@@ -157,15 +171,14 @@ export default async function TeamReportPage({
           })
         : 0;
 
-      ensureResource(prevAlloc.resourceId, prevAlloc.resource.name, prevAlloc.resource.employmentType);
-      // bookingMonth = 1 (January): December delivery from prev year → January booking
-      const existing = resourceMap.get(prevAlloc.resourceId)!.months[1];
+      ensureResource(prevAlloc.resourceId, prevAlloc.resource.name, prevAlloc.resource.employmentType, prevAlloc.resource.type);
+      const existing = resourceMap.get(prevAlloc.resourceId)!.months[displayMonth];
       if (existing) {
         existing.cost += cost;
         existing.fte += pct;
         if (!rateCard) existing.missingRate = true;
       } else {
-        resourceMap.get(prevAlloc.resourceId)!.months[1] = { cost, fte: pct, missingRate: !rateCard };
+        resourceMap.get(prevAlloc.resourceId)!.months[displayMonth] = { cost, fte: pct, missingRate: !rateCard };
       }
     }
   }
@@ -188,24 +201,17 @@ export default async function TeamReportPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Teamrapport — {team?.name}</h1>
-        <form className="flex gap-2">
-          <select name="scenarioId" defaultValue={scenarioId} className="rounded border px-2 py-1 text-sm">
-            {scenarios.map((s) => (
-              <option key={s.id} value={s.id}>{s.name} ({s.year})</option>
-            ))}
-          </select>
-          <select name="teamId" defaultValue={teamId} className="rounded border px-2 py-1 text-sm">
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-          <button type="submit" className="rounded bg-gray-800 px-3 py-1 text-sm text-white">Vis</button>
-        </form>
+        <TeamReportFilters
+          scenarios={scenarios.map((s) => ({ id: s.id, label: `${s.name} (${s.year})` }))}
+          teams={teams.map((t) => ({ id: t.id, label: t.name }))}
+          scenarioId={scenarioId}
+          teamId={teamId}
+        />
       </div>
 
       {offset > 0 && (
         <div className="rounded border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800">
-          Ekstern kostnadsforskyving: +{offset} mnd. — eksterne kostnader vises i bokföringsmåned.
+          Ekstern kostnadsforskyving: +{offset} mnd. — eksterne kostnader vises i bokføringsmåned.
           {hasPrev
             ? ` Desemberkostnad fra "${scenario?.prevScenario?.name}" er inkludert som januarkostnad.`
             : " Ingen forrige scenario er koblet — januarkostnaden for eksterne er tom."}
@@ -236,6 +242,11 @@ export default async function TeamReportPage({
                 <tr key={row.name} className="hover:bg-gray-50">
                   <td className="px-3 py-2 font-medium whitespace-nowrap">
                     <a href={`/resources/${row.id}`} className="hover:underline text-blue-700">{row.name}</a>
+                    {row.resourceType === "placeholder" && (
+                      <span className="ml-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-normal text-amber-700">
+                        Placeholder
+                      </span>
+                    )}
                   </td>
                   <td className="px-2 py-2 text-gray-600 whitespace-nowrap">
                     {row.employmentType === "internal" ? "Intern" : "Ekstern"}
@@ -286,6 +297,7 @@ export default async function TeamReportPage({
             </tr>
           </tfoot>
         </table>
+        <p className="px-4 py-2 text-right text-xs text-gray-400">Alle beløp i hele 1 000 kr</p>
       </div>
     </div>
   );

@@ -8,10 +8,8 @@ import { ScenarioSelect } from "./ScenarioSelect";
 
 function formatNok(amount: number) {
   return new Intl.NumberFormat("nb-NO", {
-    style: "currency",
-    currency: "NOK",
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(Math.round(amount / 1000));
 }
 
 type TeamCost = { internalCost: number; externalCost: number; name: string; projectCode: string };
@@ -271,9 +269,9 @@ export default async function PortfolioReportPage({
           <thead className="border-b bg-gray-50 text-xs uppercase text-gray-500">
             <tr>
               <th className="px-4 py-3 text-left">Team</th>
-              <th className="px-4 py-3 text-right">Intern</th>
-              <th className="px-4 py-3 text-right">Ekstern</th>
-              <th className="px-4 py-3 text-right">Totalt</th>
+              <th className="px-4 py-3 text-right">Intern (1 000 kr)</th>
+              <th className="px-4 py-3 text-right">Ekstern (1 000 kr)</th>
+              <th className="px-4 py-3 text-right">Totalt (1 000 kr)</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -336,6 +334,7 @@ export default async function PortfolioReportPage({
             Ingen allokeringer funnet for dette scenariet.
           </p>
         )}
+        <p className="px-4 py-2 text-right text-xs text-gray-400">Alle beløp i hele 1 000 kr</p>
       </div>
     </div>
   );

@@ -9,17 +9,22 @@ const sections = [
       { href: "/resources", label: "Ressurser" },
       { href: "/companies", label: "Firma" },
       { href: "/competencies", label: "Kompetanser" },
+      { href: "/tags", label: "Merkelapper" },
     ],
   },
   {
     title: "Planlegging",
-    links: [{ href: "/allocations", label: "Allokeringer" }],
+    links: [
+      { href: "/allocations", label: "Allokeringer" },
+      { href: "/scenarios", label: "Scenarier" },
+    ],
   },
   {
     title: "Rapporter",
     links: [
       { href: "/reports/portfolio", label: "Porteføljeoversikt" },
-      { href: "/reports/team", label: "Teamrapport" },
+      { href: "/reports/team", label: "Økonomirapport team" },
+      { href: "/reports/teams", label: "Teamoversikt" },
     ],
   },
 ];
