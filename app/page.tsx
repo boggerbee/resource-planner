@@ -1,35 +1,43 @@
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { auth } from "@/auth";
+import { ROLES } from "@/lib/auth-utils";
 
-const sections = [
-  {
-    title: "Masterdata",
-    links: [
-      { href: "/teams", label: "Team" },
-      { href: "/resources", label: "Ressurser" },
-      { href: "/companies", label: "Firma" },
-      { href: "/competencies", label: "Kompetanser" },
-      { href: "/tags", label: "Merkelapper" },
-    ],
-  },
-  {
-    title: "Planlegging",
-    links: [
-      { href: "/allocations", label: "Allokeringer" },
-      { href: "/scenarios", label: "Scenarier" },
-    ],
-  },
-  {
-    title: "Rapporter",
-    links: [
-      { href: "/reports/portfolio", label: "Porteføljeoversikt" },
-      { href: "/reports/team", label: "Økonomirapport team" },
-      { href: "/reports/teams", label: "Teamoversikt" },
-    ],
-  },
-];
+export default async function HomePage() {
+  const session = await auth();
+  const roles: string[] = (session?.user as any)?.roles ?? [];
+  const isAdmin = roles.includes(ROLES.ADMIN);
+  const isRW = roles.includes(ROLES.RW);
 
-export default function HomePage() {
+  const sections = [
+    ...(isAdmin ? [{
+      title: "Masterdata",
+      links: [
+        { href: "/teams", label: "Team" },
+        { href: "/resources", label: "Ressurser" },
+        { href: "/companies", label: "Firma" },
+        { href: "/competencies", label: "Kompetanser" },
+        { href: "/tags", label: "Merkelapper" },
+        { href: "/scenarios", label: "Scenarier" },
+        { href: "/settings", label: "Innstillinger" },
+      ],
+    }] : []),
+    ...(isAdmin || isRW ? [{
+      title: "Planlegging",
+      links: [
+        { href: "/allocations", label: "Allokeringer" },
+      ],
+    }] : []),
+    {
+      title: "Rapporter",
+      links: [
+        { href: "/reports/portfolio", label: "Porteføljeoversikt" },
+        { href: "/reports/team", label: "Økonomirapport team" },
+        { href: "/reports/teams", label: "Teamoversikt" },
+      ],
+    },
+  ];
+
   return (
     <div className="space-y-8">
       <div>
@@ -47,17 +55,13 @@ export default function HomePage() {
                 <ul className="mt-2 space-y-1">
                   {section.links.map((link) => (
                     <li key={link.href}>
-                      <Link
-                        href={link.href}
-                        className="text-blue-600 hover:underline"
-                      >
+                      <Link href={link.href} className="text-blue-600 hover:underline">
                         {link.label}
                       </Link>
                     </li>
                   ))}
                 </ul>
               </CardDescription>
-
             </CardHeader>
           </Card>
         ))}

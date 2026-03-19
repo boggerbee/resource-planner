@@ -18,7 +18,7 @@ Erstatter manuell Excel-basert bemanningsplanlegging for produktteam. Behovet er
 | ORM | Prisma | Automatiske migreringer, type-safe queries, god TS-integrasjon |
 | Lokal utvikling | Docker Compose (PostgreSQL) | Enkel oppstart, ingen lokal installasjon av Postgres nødvendig |
 | Produksjon | Selvdriftet PostgreSQL | Fleksibilitet, ingen managed-kostnad i MVP-fasen |
-| Auth | Ingen i MVP | Fokus på kjernedomenet, auth kan legges til som lag etterpå |
+| Auth | next-auth v5 (Auth.js) med Keycloak OIDC | Realm-roller fra JWT, tre tilgangsnivåer: admin / rw / ro |
 | Scenarier | Støttes fra start | Enklere å bygge inn enn å retrofitte, dekker budsjett/prognose-behov |
 | Intern kostnad | Timepris × normtimer × allokeringsprosent | Konsistent modell for interne og eksterne |
 | MVA | Opsjonelt felt per RateCard | Fleksibelt, ikke alle konsulenter har mva |
