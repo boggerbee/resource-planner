@@ -2,7 +2,9 @@
 
 Webapplikasjon for bemanningsplanlegging av produktteam. Erstatter manuell Excel-basert prosess med en normalisert domenemodell for kapasitet, kompetanse, allokering og kostnadsberegning.
 
-## Kom i gang
+---
+
+## Lokal utvikling
 
 ### Forutsetninger
 
@@ -22,7 +24,7 @@ cp .env.example .env
 # Verdiene i .env.example passer for lokal Docker-utvikling
 ```
 
-### 3. Start databasen
+### 3. Start databasen og Keycloak
 
 ```bash
 docker compose up -d
@@ -51,18 +53,73 @@ Applikasjonen kjører på [http://localhost:3000](http://localhost:3000).
 
 ---
 
+## Produksjon
+
+### Forutsetninger
+
+- Docker
+- Ekstern PostgreSQL
+- Ekstern Keycloak (med AD-backend, HTTPS)
+
+### 1. Konfigurer miljøvariabler
+
+```bash
+cp .env.production.example .env.production
+# Fyll inn DATABASE_URL, AUTH_SECRET, Keycloak-variabler osv.
+```
+
+### 2. Bygg og start med Docker
+
+```bash
+docker compose -f docker-compose.prod.yml up --build
+```
+
+Eller manuelt:
+
+```bash
+docker build -t resource-planner .
+docker run --env-file .env.production -p 3000:3000 resource-planner
+```
+
+Prisma-migreringer kjøres automatisk ved oppstart. Ingen manuell migreringssteg nødvendig.
+
+### Produksjonsmiljøvariabler
+
+Se [`.env.production.example`](.env.production.example) for fullstendig liste. Viktigste variabler:
+
+| Variabel | Beskrivelse |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL-tilkoblingsstreng |
+| `AUTH_URL` | Offentlig URL til applikasjonen |
+| `AUTH_SECRET` | Tilfeldig hemmelighet (`openssl rand -base64 32`) |
+| `AUTH_KEYCLOAK_ID` | Keycloak-klient-ID |
+| `AUTH_KEYCLOAK_SECRET` | Keycloak-klienthemmelighet |
+| `AUTH_KEYCLOAK_ISSUER` | Keycloak realm-URL |
+
+---
+
 ## Nyttige kommandoer
+
+### Utvikling
 
 | Kommando | Beskrivelse |
 |----------|-------------|
 | `npm run dev` | Start utviklingsserver |
-| `npm run db:migrate` | Kjør nye migreringer |
+| `npm run db:migrate` | Kjør nye migreringer (interaktivt) |
 | `npm run db:seed` | Last inn seed-data |
 | `npm run db:studio` | Åpne Prisma Studio (databaseeditor) |
 | `npm run db:reset` | Nullstill databasen og kjør seed på nytt |
-| `docker compose up -d` | Start PostgreSQL i bakgrunnen |
-| `docker compose down` | Stopp PostgreSQL |
-| `docker compose down -v` | Stopp PostgreSQL og slett data |
+| `docker compose up -d` | Start PostgreSQL + Keycloak |
+| `docker compose down` | Stopp tjenestene |
+| `docker compose down -v` | Stopp og slett data |
+
+### Produksjon
+
+| Kommando | Beskrivelse |
+|----------|-------------|
+| `docker build -t resource-planner .` | Bygg produksjonsimage |
+| `docker compose -f docker-compose.prod.yml up` | Start prod-image lokalt |
+| `docker images resource-planner` | Sjekk imagestørrelse |
 
 ---
 
@@ -85,8 +142,12 @@ resource-planner/
 ├── docs/
 │   ├── adr/                # Architecture Decision Records
 │   └── domain/             # Domenedokumentasjon
-├── docker-compose.yml      # Lokal PostgreSQL
-└── .env.example            # Miljøvariabel-mal
+├── docker-compose.yml          # Lokal utvikling (PostgreSQL + Keycloak)
+├── docker-compose.prod.yml     # Prod-test (kun app, ekstern DB/Keycloak)
+├── Dockerfile                  # Multi-stage produksjonsimage
+├── docker-entrypoint.sh        # Kjører migrate deploy ved oppstart
+├── .env.example                # Miljøvariabel-mal for utvikling
+└── .env.production.example     # Miljøvariabel-mal for produksjon
 ```
 
 ---
@@ -101,3 +162,4 @@ Kjerneprinsipp: **Bygg domenemodellen for bemanning, allokering, kostnad og rapp
 - Beregninger gjøres server-side, ikke i React-komponenter
 - `allocationPct` lagres som `Decimal(5,4)` (0.0–1.0), vises som 0–100 % i UI
 - Normtimer og faktureringsgrad er konfigurerbare per periode/ressurs, ikke hardkodet
+- Produksjonsimage bruker Next.js standalone-output — vesentlig mindre enn full `node_modules`

@@ -1,0 +1,11 @@
+node_modules
+.next
+.env*
+keycloak/
+docs/
+prisma/seed.ts
+scripts/
+*.md
+.git
+.gitignore
+.eslintrc*
