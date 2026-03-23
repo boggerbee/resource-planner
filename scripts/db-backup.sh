@@ -27,6 +27,9 @@ if [[ -z "$DATABASE_URL" ]]; then
   exit 1
 fi
 
+# Strip Prisma-spesifikke query-parametere (f.eks. ?schema=public) som pg_dump ikke støtter
+DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/?schema=[^&]*//;s/&schema=[^&]*//')
+
 BACKUP_DIR="backups"
 mkdir -p "$BACKUP_DIR"
 

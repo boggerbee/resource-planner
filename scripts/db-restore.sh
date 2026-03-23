@@ -32,6 +32,9 @@ if [[ -z "$DATABASE_URL" ]]; then
   exit 1
 fi
 
+# Strip Prisma-spesifikke query-parametere (f.eks. ?schema=public) som psql ikke støtter
+DATABASE_URL=$(echo "$DATABASE_URL" | sed 's/?schema=[^&]*//;s/&schema=[^&]*//')
+
 echo "ADVARSEL: Dette vil overskrive databasen pekt på av $ENV_FILE"
 echo "Backup-fil: $BACKUP_FILE"
 read -r -p "Er du sikker? [y/N] " CONFIRM
